@@ -1,0 +1,480 @@
+%{
+	#include <iostream>
+	#include <string>
+	#include <list>
+	using namespace std;
+	#include "Framework.h"
+	#include "Symbol.h"
+	#include "Exceptions.h"
+    #include "source.h"
+
+    #define YYSTYPE NonTerminal
+    extern list<string> varsListToTypesList(const list<Variable>& varList);
+
+    extern int yylineno;
+    int yylex();
+    void yyerror(const char*);
+    bool isInWhile = false;
+
+
+    void myExit(){
+         Framework::getInstance().exitOnError = true;
+         exit(0);
+    }
+
+    bool isByteSize(string& val){
+        int dec_val = std::stoi(val);
+        if (dec_val <=255 && dec_val >= 0){
+            return true;
+        }
+        return false;
+    }
+
+    void isSetSize(const string& first_num_string, const string& second_num_string){
+            int first_num = std::stoi(first_num_string);
+            int second_num = std::stoi(second_num_string);
+            if (second_num - first_num > 255 || second_num - first_num <= 0){
+                output::errorSetTooLarge(yylineno, first_num_string, second_num_string);
+                myExit();
+            }
+        }
+
+
+
+	//NonTerminal classes
+    class Program : public NonTerminal{};
+    class Funcs : public NonTerminal{};
+    class FuncDecl : public NonTerminal{};
+    class RetType : public NonTerminal{
+    public:
+        RetType(const string& type) : NonTerminal("", type) {}
+
+    };
+    class Formals : public NonTerminal{
+        public:
+        list<Variable> namesAndTypes;
+        Formals(list<Variable>& namesAndTypes) : NonTerminal("FORMALS", "FORMALS"), namesAndTypes(namesAndTypes) {
+            this->namesAndTypes = namesAndTypes;
+        }
+    };
+    class FormalsList : public NonTerminal{
+        public:
+            list<Variable> namesAndTypes;
+            FormalsList(const string& name, const string& type) : NonTerminal("FORMALS LIST", "FORMALS LIST") {
+                namesAndTypes.push_back(Variable(name, type));
+            }
+
+    };
+	class FormalDecl : public NonTerminal{
+	public:
+	    FormalDecl(const string& name, const string& type) : NonTerminal(name, type) {this->name = name; this->type = type;}
+	};
+    class Statements : public NonTerminal{
+    public:
+        Statements(const string& type): NonTerminal("", type){}
+    };
+	class Statement : public NonTerminal{
+	    public:
+            bool is_break;
+            bool is_continue;
+            Statement(const string& type): NonTerminal("", type), is_break(false), is_continue(false){}
+            Statement(const string& type, bool is_break, bool is_continue): NonTerminal("", type), is_break(is_break), is_continue(is_continue){}
+	};
+	class Call : public NonTerminal{
+	public:
+	    Call(const string& name, const string& type) : NonTerminal(name, type){}
+
+	};
+	class ExpList : public NonTerminal{
+	    public:
+	    ExpList() : NonTerminal("", "")  {}
+	};
+    class Type : public NonTerminal{
+        public:
+        Type(const string& type) : NonTerminal("", type) {this->type = type;}
+    };
+    class Exp : public NonTerminal{
+        public:
+        Exp(const string& type) : NonTerminal("", type) {}
+    };
+
+    static string typeBinopAddChecking(string type1, string type2){
+        if(
+            ((type1 == "SET" && type2 == "BYTE") || (type1 == "SET" && type2 == "INT")) ||
+            ((type2 == "SET" && type1 == "BYTE") || (type2 == "SET" && type1 == "INT"))){
+            return "SET";
+        }
+        if (type1 == "INT" || type2 == "INT"){
+            return "INT";
+        }
+        if(type1 == "BYTE" || type2 == "BYTE"){
+            return "BYTE";
+        }
+
+        output::errorMismatch(yylineno);
+        myExit();
+    }
+
+    string typeBinopMultiplicativeChecking(string type1, string type2){
+        if(type1 == "SET" || type2 == "SET"){
+            output::errorMismatch(yylineno);
+            myExit();
+        }
+        if (type1 == "INT" || type2 == "INT"){
+            return "INT";
+        }
+        return "BYTE";
+    }
+
+    void assignTypeCheck(const string& accepting_type, const string& entering_type){
+        if(accepting_type == entering_type){
+            return;
+        }
+        if(accepting_type == "INT" && entering_type == "BYTE"){
+            return;
+        }
+        output::errorMismatch(yylineno);
+        myExit();
+    }
+
+    bool isAssignTypeCheck(const string& accepting_type, const string& entering_type){
+            if(accepting_type == entering_type){
+                return true;
+            }
+            if(accepting_type == "INT" && entering_type == "BYTE"){
+                return true;
+            }
+            return false;
+        }
+
+    bool listInsertable(const list<string>& param_list, const list<string>& arg_list){
+        if (param_list.size() != arg_list.size()) return false;
+
+        std::list<std::string>::const_iterator param_iter = param_list.cbegin();
+        std::list<std::string>::const_iterator arg_iter = arg_list.cbegin();
+
+        for (int i = 0; i<param_list.size(); ++i){
+           if (!isAssignTypeCheck(*param_iter, *arg_iter)) return false;
+            ++param_iter;
+            ++arg_iter;
+        }
+        return true;
+    }
+
+%}
+
+%right ASSIGN
+%left OR
+%left AND
+%left RELOP_EQUALITY
+%left IN_RELOP
+%nonassoc RELOP_RELATIONAL
+%left BINOP_ADDITIVE
+%left BINOP_MULTIPLICATIVE
+%right NOT
+%left SC RPAREN RBRACE RBRACKET
+%right LBRACE LPAREN LBRACKET
+
+%right COMMA
+%right WHILE
+%right IF
+%right ELSE
+%nonassoc TRUE FALSE RETURN BREAK CONTINUE DOTS ID NUM STRING SET INT BYTE B BOOL VOID
+
+%%
+
+Program:		Funcs {};
+Funcs:			/*epsilon*/ {}
+                    |FuncDecl Funcs {};
+FuncDecl:		RetType
+                ID {
+                    Framework::getInstance().addScope(Scope::FUNCTION);
+                    Framework::getInstance().addFunction(Function(yylval.name,$1.type));
+                }
+                LPAREN
+                Formals {
+                    int numParamsAddedSoFar = 0;
+                    for (const Variable& param : $5.namesAndTypes){
+                        Framework::getInstance().addParamToLastFunc(param);
+
+                        ++numParamsAddedSoFar;
+                        Variable offsetFixedParam = Variable(param.name, param.type, -numParamsAddedSoFar);
+                        Framework::getInstance().insertVariableIntoTopScope(offsetFixedParam);
+                    }
+                }
+                RPAREN
+                LBRACE
+                Statements
+                RBRACE {
+                    Framework::getInstance().popScope();
+                };
+RetType:		Type {$$ = RetType($1.type);}
+                    | VOID {$$ = RetType("VOID");};
+Formals:		/*epsilon*/ {}
+                    | FormalsList {
+                        Formals formals = Formals($1.namesAndTypes);
+                        $$ = formals;
+                        $$.namesAndTypes = formals.namesAndTypes;
+                    } ;
+FormalsList:	FormalDecl {
+                    FormalsList formalsList = FormalsList($1.name, $1.type);
+                    $$ = formalsList;
+                    $$.namesAndTypes = formalsList.namesAndTypes;
+                }
+                    | FormalDecl COMMA FormalsList{$$ = $3; $$.namesAndTypes.push_front(Variable($1.name, $1.type));} ;
+FormalDecl:		Type ID {$$ = FormalDecl(yylval.name, $1.type);} ;
+Statements:		Statement {$$ = Statements($1.type);}
+                    | Statements Statement{} ;
+Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
+                Statements {Framework::getInstance().popScope();}
+                RBRACE {}
+                    | Type ID SC { Framework::getInstance().insertVariableIntoTopScope(Variable(yylval.name,$1.type));}
+                    | Type ID ASSIGN Exp SC {
+                            Framework::getInstance().insertVariableIntoTopScope(Variable($2.name,$1.type));
+                            assignTypeCheck($1.type,$4.type);
+                    }
+                    | ID ASSIGN Exp SC {
+                        string accepting_type = Framework::getInstance()[$1.name].type;
+                        assignTypeCheck(accepting_type, $3.type);
+                        if (Framework::getInstance().isFunction($1.name)){
+                            output::errorUndef(yylineno, $1.name);
+                            myExit();
+                        }
+                    }
+
+                    | Call SC {}
+                    | RETURN SC {
+                        const string& last_function_type = Framework::getInstance().getLastAddedFunction().type;
+                        if(last_function_type!="VOID"){
+                            output::errorMismatch(yylineno);
+                            myExit();
+                        }
+                        $$ = Statement("VOID");
+                    }
+                    | RETURN Exp SC {
+                        const string& last_function_type = Framework::getInstance().getLastAddedFunction().type;
+                        assignTypeCheck(last_function_type, $2.type);
+                        $$ = Statement($2.type);
+                    }
+
+                    | IF
+                    LPAREN
+                    Exp
+                    RPAREN marker_RPAREN
+                    Statement marker_STATEMENT {
+                        if ($3.type != "BOOL"){
+                            output::errorMismatch(yylineno);
+                            myExit();
+                        }
+                    }
+                    | IF
+                    LPAREN
+                    Exp
+                    RPAREN marker_RPAREN
+                    Statement marker_STATEMENT
+                    ELSE {Framework::getInstance().addScope(Scope::IF);}
+                    Statement {
+                        Framework::getInstance().popScope();
+                        if ($3.type != "BOOL"){
+                            output::errorMismatch(yylineno);
+                            myExit();
+                        }
+                    }
+                    | WHILE LPAREN Exp RPAREN {Framework::getInstance().addScope(Scope::LOOP); isInWhile = true;} Statement {Framework::getInstance().popScope(); isInWhile = false;} {
+                    if ($3.type != "BOOL"){
+                         output::errorMismatch(yylineno);
+                         myExit();
+                    }
+
+                    }
+                    | BREAK SC{
+                        if(!isInWhile){
+                             output::errorUnexpectedBreak(yylineno);
+                             myExit();
+                        }
+                    }
+                    | CONTINUE SC{
+                        if(!isInWhile){
+                            output::errorUnexpectedContinue(yylineno);
+                            myExit();
+                        }
+                    }
+Call:			ID
+                LPAREN
+                ExpList
+                RPAREN {
+                        try{
+                            string type = Framework::getInstance()[$1.name].type;
+                            if (!Framework::getInstance().isFunction($1.name)) throw Exceptions::IdentifierDoesNotExistException(yylineno, $1.name);
+
+                            if(!listInsertable(varsListToTypesList(dynamic_cast<Function&>(Framework::getInstance()[$1.name]).getParameters()), $3.arrguments_list)){
+                                list<Variable> params = dynamic_cast<Function&>(Framework::getInstance()[$1.name]).getParameters();
+                                const std::list<string> typesList = varsListToTypesList(params);
+                                vector<string> argTypes = vector<string>(typesList.begin(), typesList.end());
+                                output::errorPrototypeMismatch(yylineno, $1.name, argTypes);
+                                myExit();
+                            }
+                            $$ = Call ($1.name, type);
+                        }
+                        catch(Exceptions::IdentifierDoesNotExistException &e){
+                            output::errorUndefFunc(yylineno, $1.name);
+                            myExit();
+                        }
+                    }
+                    | ID LPAREN RPAREN {
+
+                        try{
+                               string type = Framework::getInstance()[yylval.name].type;
+                               if (!Framework::getInstance().isFunction(yylval.name)) throw Exceptions::IdentifierDoesNotExistException(yylineno, yylval.name);
+
+                               $$ = Call (yylval.name, type);
+                        }
+                        catch(Exceptions::IdentifierDoesNotExistException &e){
+                            output::errorUndefFunc(yylineno, yylval.name);
+                            myExit();
+                        }
+                    };
+ExpList:		Exp {   $$ = ExpList();
+                        $$.arrguments_list.push_front($1.type);
+                     }
+                    | Exp COMMA ExpList {
+                        $$ = $3;
+                        $$.arrguments_list.push_front($1.type);
+                    }
+Type:			INT {$$ = Type("INT");}
+                    | BYTE{$$ =  Type("BYTE");}
+                    | BOOL {$$ =  Type("BOOL");}
+                    | SET LBRACKET NUM{$$ = Type("SET"); $3.name = yylval.name; } DOTS NUM RBRACKET {
+                        isSetSize($3.name, yylval.name);
+                        $$ = Type("SET");
+                    };
+
+Exp:			LPAREN Exp RPAREN {$$ =  Exp($2.type);}
+                    | Exp BINOP_ADDITIVE Exp {
+                        string res_type = typeBinopAddChecking($1.type, $3.type);
+                        $$ = Exp(res_type);
+                        }
+                    | Exp BINOP_MULTIPLICATIVE Exp {
+                        string res_type = typeBinopMultiplicativeChecking($1.type, $3.type);
+                        $$ = Exp(res_type);
+                    }
+                    | ID {
+                            try{
+                                $$ =  Exp(Framework::getInstance()[yylval.name].type);
+                                if (Framework::getInstance().isFunction(yylval.name)){
+                                    output::errorUndef(yylineno, yylval.name);
+                                    myExit();
+                                }
+                            }
+                            catch(Exceptions::IdentifierDoesNotExistException &e){
+                                output::errorUndef(yylineno, yylval.name);
+                                myExit();
+                            }
+                    }
+                    | Call {$$ =  Exp($1.type);}
+                    | NUM {$$ = Exp("INT");}
+                    | NUM B {
+                        if (!isByteSize(yylval.name)){
+                            output::errorByteTooLarge(yylineno, yylval.name);
+                            myExit();
+                        }
+                        $$ =  Exp("BYTE");
+                     }
+                    | STRING {$$ =  Exp("STRING");}
+                    | TRUE {$$ =  Exp("BOOL");}
+                    | FALSE {$$ =  Exp("BOOL");}
+                    | NOT Exp {
+                        if($2.type != "BOOL"){
+                             output::errorMismatch(yylineno);
+                             myExit();
+                        }
+                        else{
+                            $$ =  Exp("BOOL");
+                        }
+                    }
+                    | Exp AND Exp {
+                        if($1.type != "BOOL" || $3.type != "BOOL"){
+                             output::errorMismatch(yylineno);
+                             myExit();
+                       }
+                       else{
+                           $$ =  Exp("BOOL");
+                       }
+                    }
+                    | Exp OR Exp{
+                        if($1.type != "BOOL" || $3.type != "BOOL"){
+                             output::errorMismatch(yylineno);
+                             myExit();
+                       }
+                       else{
+                           $$ =  Exp("BOOL");
+                       }
+                    }
+                    | Exp RELOP_RELATIONAL Exp {
+                        if(($1.type != "INT" && $1.type != "BYTE") || ($3.type != "INT" && $3.type != "BYTE")){
+                             output::errorMismatch(yylineno);
+                             myExit();
+                        }
+                        else{
+                            $$ =  Exp ("BOOL");
+                        }
+                    }
+                    |Exp IN_RELOP Exp {
+                        if(($1.type != "INT" && $1.type != "BYTE") || ($3.type != "SET")){
+                             output::errorMismatch(yylineno);
+                             myExit();
+                        }
+                        else{
+                            $$ =  Exp ("BOOL");
+                        }
+                    }
+                    | Exp RELOP_EQUALITY Exp {
+                        if(($1.type != "INT" && $1.type != "BYTE") || ($3.type != "INT" && $3.type != "BYTE")){
+                             output::errorMismatch(yylineno);
+                             myExit();
+                      }
+                      else{
+                          $$ =  Exp ("BOOL");
+                      }
+                    }
+                    | LPAREN Type RPAREN Exp {
+                        if($2.type != "INT" || $4.type !="SET"){
+                             output::errorMismatch(yylineno);
+                             myExit();
+                        }
+                        else{
+                            $$ =  Exp("INT");
+                        }
+
+                    };
+marker_RPAREN:      /*epsilon*/ {Framework::getInstance().addScope(Scope::IF);}
+marker_STATEMENT:   /*epsilon*/ {Framework::getInstance().popScope();}
+
+%%
+void yyerror(const char*){
+	output::errorSyn(yylineno);
+	myExit();
+}
+
+int main(){
+    try{
+        yyparse();
+    }
+    catch (const Exceptions::AlreadyExistsException& e){
+        output::errorDef(yylineno, e.name);
+        myExit();
+    }
+    catch (const Exceptions::IdentifierDoesNotExistException& e){
+        output::errorUndef(yylineno, e.name);
+        myExit();
+    }
+
+    bool mainExists = false;
+    for (const Function& func : Framework::getInstance().functions){
+        if (func.name == "main" && func.type == "VOID" && func.getParameters().empty()) mainExists = true;
+    }
+    if (!mainExists){
+        output::errorMainMissing();
+        myExit();
+    }
+}
