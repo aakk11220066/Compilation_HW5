@@ -160,7 +160,6 @@
         }
         return true;
     }
-
 %}
 
 %right ASSIGN
@@ -185,7 +184,7 @@
 
 Program:		Funcs {};
 Funcs:			/*epsilon*/ {}
-                    |FuncDecl Funcs {};
+                    |FuncDecl Funcs {}; //TODO: backpatch
 FuncDecl:		RetType
                 ID {
                     Framework::getInstance().addScope(Scope::FUNCTION);
@@ -224,7 +223,7 @@ FormalsList:	FormalDecl {
                     | FormalDecl COMMA FormalsList{$$ = $3; $$.namesAndTypes.push_front(Variable($1.name, $1.type));} ;
 FormalDecl:		Type ID {$$ = FormalDecl(yylval.name, $1.type);} ;
 Statements:		Statement {$$ = Statements($1.type);}
-                    | Statements Statement{} ;
+                    | Statements Statement{} ; // TODO: backpatch
 Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                 Statements {Framework::getInstance().popScope();}
                 RBRACE {}
@@ -232,7 +231,7 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                     | Type ID ASSIGN Exp SC {
                             Framework::getInstance().insertVariableIntoTopScope(Variable($2.name,$1.type));
                             assignTypeCheck($1.type,$4.type);
-                    }
+                    } //TODO: update Variable.LLVM_register, call freshVar, transfer data into register
                     | ID ASSIGN Exp SC {
                         string accepting_type = Framework::getInstance()[$1.name].type;
                         assignTypeCheck(accepting_type, $3.type);
@@ -240,10 +239,10 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                             output::errorUndef(yylineno, $1.name);
                             myExit();
                         }
-                    }
+                    } //TODO: update Variable.LLVM_register, call freshVar, transfer data into register
 
                     | Call SC {}
-                    | RETURN SC {
+                    | RETURN SC { // TODO: generate jump code, request backpatching
                         const string& last_function_type = Framework::getInstance().getLastAddedFunction().type;
                         if(last_function_type!="VOID"){
                             output::errorMismatch(yylineno);
@@ -255,7 +254,7 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                         const string& last_function_type = Framework::getInstance().getLastAddedFunction().type;
                         assignTypeCheck(last_function_type, $2.type);
                         $$ = Statement($2.type);
-                    }
+                    } // TODO: generate jump code, request backpatching, transfer data to return zone
 
                     | IF
                     LPAREN
@@ -266,7 +265,7 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                             output::errorMismatch(yylineno);
                             myExit();
                         }
-                    }
+                    } // TODO: generate jump code, request backpatching
                     | IF
                     LPAREN
                     Exp
@@ -279,12 +278,12 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                             output::errorMismatch(yylineno);
                             myExit();
                         }
-                    }
+                    } // TODO: generate jump code, request backpatching
                     | WHILE LPAREN Exp RPAREN {Framework::getInstance().addScope(Scope::LOOP); isInWhile = true;} Statement {Framework::getInstance().popScope(); isInWhile = false;} {
                     if ($3.type != "BOOL"){
                          output::errorMismatch(yylineno);
                          myExit();
-                    }
+                    } // TODO: generate jump code, request backpatching
 
                     }
                     | BREAK SC{
@@ -292,13 +291,13 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                              output::errorUnexpectedBreak(yylineno);
                              myExit();
                         }
-                    }
+                    } // TODO: generate jump code, request backpatching
                     | CONTINUE SC{
                         if(!isInWhile){
                             output::errorUnexpectedContinue(yylineno);
                             myExit();
                         }
-                    }
+                    } // TODO: generate jump code, request backpatching
 Call:			ID
                 LPAREN
                 ExpList
@@ -320,7 +319,7 @@ Call:			ID
                             output::errorUndefFunc(yylineno, $1.name);
                             myExit();
                         }
-                    }
+                    } // TODO: generate jump code, request backpatching
                     | ID LPAREN RPAREN {
 
                         try{
@@ -333,14 +332,14 @@ Call:			ID
                             output::errorUndefFunc(yylineno, yylval.name);
                             myExit();
                         }
-                    };
+                    }; // TODO: generate jump code, request backpatching
 ExpList:		Exp {   $$ = ExpList();
                         $$.arrguments_list.push_front($1.type);
-                     }
+                     } //TODO: call freshVar
                     | Exp COMMA ExpList {
                         $$ = $3;
                         $$.arrguments_list.push_front($1.type);
-                    }
+                    } //TODO: call freshVar
 Type:			INT {$$ = Type("INT");}
                     | BYTE{$$ =  Type("BYTE");}
                     | BOOL {$$ =  Type("BOOL");}
@@ -353,11 +352,11 @@ Exp:			LPAREN Exp RPAREN {$$ =  Exp($2.type);}
                     | Exp BINOP_ADDITIVE Exp {
                         string res_type = typeBinopAddChecking($1.type, $3.type);
                         $$ = Exp(res_type);
-                        }
+                        } //TODO: emit code for calculating, call freshVar
                     | Exp BINOP_MULTIPLICATIVE Exp {
                         string res_type = typeBinopMultiplicativeChecking($1.type, $3.type);
                         $$ = Exp(res_type);
-                    }
+                    } //TODO: emit code for calculating, check for division by 0, call freshVar
                     | ID {
                             try{
                                 $$ =  Exp(Framework::getInstance()[yylval.name].type);
@@ -391,8 +390,8 @@ Exp:			LPAREN Exp RPAREN {$$ =  Exp($2.type);}
                         else{
                             $$ =  Exp("BOOL");
                         }
-                    }
-                    | Exp AND Exp {
+                    } // TODO: swap truelist and falselist of Exp
+                    | Exp AND Exp { //TODO: emit code for calculating, short-circuit after AND token (request backpatching)
                         if($1.type != "BOOL" || $3.type != "BOOL"){
                              output::errorMismatch(yylineno);
                              myExit();
@@ -401,7 +400,7 @@ Exp:			LPAREN Exp RPAREN {$$ =  Exp($2.type);}
                            $$ =  Exp("BOOL");
                        }
                     }
-                    | Exp OR Exp{
+                    | Exp OR Exp{ //TODO: emit code for calculating, short-circuit after OR token (request backpatching)
                         if($1.type != "BOOL" || $3.type != "BOOL"){
                              output::errorMismatch(yylineno);
                              myExit();
@@ -418,7 +417,7 @@ Exp:			LPAREN Exp RPAREN {$$ =  Exp($2.type);}
                         else{
                             $$ =  Exp ("BOOL");
                         }
-                    }
+                    } //TODO: emit code for calculating, call freshvar
                     |Exp IN_RELOP Exp {
                         if(($1.type != "INT" && $1.type != "BYTE") || ($3.type != "SET")){
                              output::errorMismatch(yylineno);
@@ -427,7 +426,7 @@ Exp:			LPAREN Exp RPAREN {$$ =  Exp($2.type);}
                         else{
                             $$ =  Exp ("BOOL");
                         }
-                    }
+                    } //TODO: emit code for calculating, call freshvar
                     | Exp RELOP_EQUALITY Exp {
                         if(($1.type != "INT" && $1.type != "BYTE") || ($3.type != "INT" && $3.type != "BYTE")){
                              output::errorMismatch(yylineno);
@@ -436,7 +435,7 @@ Exp:			LPAREN Exp RPAREN {$$ =  Exp($2.type);}
                       else{
                           $$ =  Exp ("BOOL");
                       }
-                    }
+                    } //TODO: emit code for calculating, call freshvar
                     | LPAREN Type RPAREN Exp {
                         if($2.type != "INT" || $4.type !="SET"){
                              output::errorMismatch(yylineno);
@@ -445,7 +444,6 @@ Exp:			LPAREN Exp RPAREN {$$ =  Exp($2.type);}
                         else{
                             $$ =  Exp("INT");
                         }
-
                     };
 marker_RPAREN:      /*epsilon*/ {Framework::getInstance().addScope(Scope::IF);}
 marker_STATEMENT:   /*epsilon*/ {Framework::getInstance().popScope();}

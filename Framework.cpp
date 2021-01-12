@@ -46,7 +46,7 @@ Symbol &Framework::operator[](const string &name) {
     try{
         return *(symbol_table.at(name));
     } catch(std::out_of_range&) {
-        throw Exceptions::IdentifierDoesNotExistException(0, name); //FIXME: 0 is only a placeholder number, should be lineno - update: may not need to fix (since printError function is never used)
+        throw Exceptions::IdentifierDoesNotExistException(0, name);
     }
 
 }
@@ -71,11 +71,13 @@ Framework::Framework() {
     printFunction.params.emplace_back(Variable("stringToPrint", "STRING"));
     addFunction(printFunction);
     addParamToLastFunc(printFunction.params.back());
+    // TODO: generate code for print (taken from assignment)
 
     Function printiFunction = Function("printi", "VOID");
     printiFunction.params.emplace_back(Variable("intToPrint", "INT"));
     addFunction(Function("printi",  "VOID"));
     addParamToLastFunc(printiFunction.params.back());
+    // TODO: generate code for printi (taken from assignment)
 }
 
 Framework singleton = Framework();
@@ -119,4 +121,9 @@ bool Framework::isFunction(const string &name) {
         if (func.name == name) return true;
     }
     return false;
+}
+
+std::string Framework::freshVar(){
+    // TODO: allocate space for variable (on stack?)
+    return "t" + (nextRegister++);
 }

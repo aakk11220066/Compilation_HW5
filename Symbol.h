@@ -21,6 +21,7 @@ protected:
 
 class Variable : public Symbol{
 public:
+    string LLVM_register = "";
     Variable(const string &name, const string &type); //For Shlomi's use
     Variable(const string &name, const string &type, int offset); //For Akiva's use
     bool operator==(const Variable& other) const{

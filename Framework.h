@@ -35,7 +35,12 @@ public:
 
 
 class Framework {
+protected:
+    int nextRegister = 0;
+
 public:
+    std::string freshVar();
+
     std::stack<Scope> scopes;
     std::deque<Function> functions;
 
