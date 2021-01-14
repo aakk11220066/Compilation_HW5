@@ -14,6 +14,7 @@ class NonTerminal{
 public:
     string name;
     string type;
+    string place = "";
     list<Variable> namesAndTypes = list<Variable>();
     list<string> arrguments_list = list<string>();
     NonTerminal() = default;

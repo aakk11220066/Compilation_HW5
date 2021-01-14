@@ -56,11 +56,27 @@ continue                    return CONTINUE;
 \]                          return RBRACKET;
 \=                          return ASSIGN;
 \.\.                        return DOTS;
-{in}                          return IN_RELOP;
-{relop_relational}          return RELOP_RELATIONAL;
-{relop_equality}            return RELOP_EQUALITY;
-{binop_multiplicative}      return BINOP_MULTIPLICATIVE;
-{binop_additive}            return BINOP_ADDITIVE;
+{in}                        return IN_RELOP;
+{relop_relational}          {
+                                yylval = NonTerminal(strdup(yytext), "");
+                                yylval.name = strdup(yytext);
+                                return RELOP_RELATIONAL;
+                            }
+{relop_equality}            {
+                                yylval = NonTerminal(strdup(yytext), "");
+                                yylval.name = strdup(yytext);
+                                return RELOP_EQUALITY;
+                            }
+{binop_multiplicative}      {
+                                yylval = NonTerminal(strdup(yytext), "");
+                                yylval.name = strdup(yytext);
+                                return BINOP_MULTIPLICATIVE;
+                            }
+{binop_additive}            {
+                                yylval = NonTerminal(strdup(yytext), "");
+                                yylval.name = strdup(yytext);
+                                return BINOP_ADDITIVE;
+                            }
 {comment}                   ;
 {id}                        {
                                 yylval = NonTerminal(strdup(yytext), "");

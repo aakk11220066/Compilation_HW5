@@ -7,6 +7,7 @@
 	#include "Symbol.h"
 	#include "Exceptions.h"
     #include "source.h"
+    #include "bp.cpp"
 
     #define YYSTYPE NonTerminal
     extern list<string> varsListToTypesList(const list<Variable>& varList);
@@ -16,6 +17,7 @@
     void yyerror(const char*);
     bool isInWhile = false;
 
+    CodeBuffer codeManager = CodeBuffer();
 
     void myExit(){
          Framework::getInstance().exitOnError = true;
@@ -348,15 +350,35 @@ Type:			INT {$$ = Type("INT");}
                         $$ = Type("SET");
                     };
 
-Exp:			LPAREN Exp RPAREN {$$ =  Exp($2.type);}
+// TODO: All Exps need freshVar (into Exp.place)
+Exp:			LPAREN Exp RPAREN {
+                    $$ =  Exp($2.type);
+
+                    $$.place = $2.place;
+                }
                     | Exp BINOP_ADDITIVE Exp {
                         string res_type = typeBinopAddChecking($1.type, $3.type);
                         $$ = Exp(res_type);
-                        } //TODO: emit code for calculating, call freshVar
+
+                        $$.place = Framework::getInstance().freshVar();
+                        codeManager.emit($$.place + " = " + $1.place + $2.name + $3.place);
+                    } //DONE: emit code for calculating, call freshVar
                     | Exp BINOP_MULTIPLICATIVE Exp {
                         string res_type = typeBinopMultiplicativeChecking($1.type, $3.type);
                         $$ = Exp(res_type);
-                    } //TODO: emit code for calculating, check for division by 0, call freshVar
+
+                        $$.place = Framework::getInstance().freshVar();
+                        if ($2.name == "/"){
+                            string errStr = freshVar();
+                            codeManager.emit(errStr + " = internal constant [24 x i8] c\"Error division by zero\\0A\\00\"");
+                            string errStrPtr = freshVar();
+                            codeManager.emit(errStrPtr + " = getelementptr [24 x i8], [24 x i8]* " + errStr + ", i32 0, i32 0");
+                            codeManager.emit("call void (i8*) @print(i8* " + errStrPtr + " )");
+
+                            codeManager.emit("call void (i32) @exit(i32 0)");
+                        }
+                        codeManager.emit($$.place + ":=" + $1.place + $2.name + $3.place);
+                    } //DONE: emit code for calculating, check for division by 0, call freshVar
                     | ID {
                             try{
                                 $$ =  Exp(Framework::getInstance()[yylval.name].type);
@@ -431,10 +453,10 @@ Exp:			LPAREN Exp RPAREN {$$ =  Exp($2.type);}
                         if(($1.type != "INT" && $1.type != "BYTE") || ($3.type != "INT" && $3.type != "BYTE")){
                              output::errorMismatch(yylineno);
                              myExit();
-                      }
-                      else{
-                          $$ =  Exp ("BOOL");
-                      }
+                        }
+                        else{
+                            $$ =  Exp ("BOOL");
+                        }
                     } //TODO: emit code for calculating, call freshvar
                     | LPAREN Type RPAREN Exp {
                         if($2.type != "INT" || $4.type !="SET"){
