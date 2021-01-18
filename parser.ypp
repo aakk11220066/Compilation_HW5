@@ -260,11 +260,15 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                             myExit();
                         }
                         $$ = Statement("VOID");
+                        codeManager.emit("ret void");
+
                     }
                     | RETURN Exp SC {
                         const string& last_function_type = Framework::getInstance().getLastAddedFunction().type;
                         assignTypeCheck(last_function_type, $2.type);
                         $$ = Statement($2.type);
+                        codeManager.emit("ret i32 " + $2.place);
+
                     } // TODO: generate jump code, request backpatching, transfer data to return zone
 
                     | IF
@@ -540,6 +544,10 @@ void yyerror(const char*){
 
 int main(){
     try{
+        codeManager.emit("define void @printi(i32) {call i32 (i8*, ...) @printf(i8* getelementptr ([4 x i8],
+        [4 x i8]* @.int_specifier, i32 0, i32 0), i32 %0) ret void} ");
+        codeManager.emit("define void @print(i8*) {call i32 (i8*, ...) @printf(i8* getelementptr ([4 x i8],
+                        [4x i8]* @.str_specifier, i32 0, i32 0), i8* %0)ret void}");
         yyparse();
     }
     catch (const Exceptions::AlreadyExistsException& e){
