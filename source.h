@@ -27,6 +27,7 @@ public:
         place = other.place;
         namesAndTypes = other.namesAndTypes;
         arrguments_list = other.arrguments_list;
+        places_list = other.places_list;
         return *this;
     };
 };

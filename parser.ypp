@@ -164,10 +164,10 @@
     }
 
     string placesListToString(const list<string> places_list){
-        result = "";
+        string result = "";
         for (const string& param : places_list){
-            result += "i32* "
-            result += param.register + " ";
+            //result += "i32* ";
+            result += param + " ";
         }
         return result;
     }
@@ -337,7 +337,7 @@ Call:			ID
                                 return_type = "void";
                             }
                             else{
-                                return_type = "i32"
+                                return_type = "i32";
                             }
                             codeManager.emit(operand + " = call " + return_type + " @" + $1.name + "(" + argument_list + ")");
 
@@ -548,9 +548,9 @@ void yyerror(const char*){
 
 int main(){
     try{
-        codeManager.emit("define void @printi(i32) {call i32 (i8*, ...) @printf(i8* getelementptr ([4 x i8],
-        [4 x i8]* @.int_specifier, i32 0, i32 0), i32 %0) ret void} ");
-        codeManager.emit("define void @print(i8*) {call i32 (i8*, ...) @printf(i8* getelementptr ([4 x i8],
+        codeManager.emit("define void @printi(i32) {call i32 (i8*, ...) @printf(i8* getelementptr ([4 x i8], \
+                        [4 x i8]* @.int_specifier, i32 0, i32 0), i32 %0) ret void} ");
+        codeManager.emit("define void @print(i8*) {call i32 (i8*, ...) @printf(i8* getelementptr ([4 x i8], \
                         [4x i8]* @.str_specifier, i32 0, i32 0), i8* %0)ret void}");
         yyparse();
     }
