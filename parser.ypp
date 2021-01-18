@@ -537,6 +537,7 @@ marker_RPAREN:      /*epsilon*/ {Framework::getInstance().addScope(Scope::IF);}
 marker_STATEMENT:   /*epsilon*/ {Framework::getInstance().popScope();}
 
 %%
+
 void yyerror(const char*){
 	output::errorSyn(yylineno);
 	myExit();
