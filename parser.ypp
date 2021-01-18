@@ -389,12 +389,12 @@ Exp:			LPAREN Exp RPAREN {
                         string operation = ($2.name == "+")? "add" : "sub";
                         string operand1 = Framework::getInstance().freshTemp();
                         string operand2 = Framework::getInstance().freshTemp();
-                        codeManager.emit(operand1 + " = load " + $1.place);
-                        codeManager.emit(operand2 + " = load " + $3.place);
+                        codeManager.emit(operand1 + " = load i32, " + $1.place + ", align 4");
+                        codeManager.emit(operand2 + " = load i32, " + $3.place + ", align 4");
                         string addResult = Framework::getInstance().freshTemp();
                         codeManager.emit(addResult + " = " + operation + " " + operand1 + ", " + operand2);
-                        $$.place = Framework::getInstance().freshVar();
-                        codeManager.emit("store i32 " + addResult + ", i32* " + $$.place);
+                        $$.place = "i32* " + Framework::getInstance().freshVar();
+                        codeManager.emit("store i32 " + addResult + ", " + $$.place + ", align 4");
                     }
                     | Exp BINOP_MULTIPLICATIVE Exp {
                         string res_type = typeBinopMultiplicativeChecking($1.type, $3.type);
@@ -404,34 +404,37 @@ Exp:			LPAREN Exp RPAREN {
                         string operation = ($2.name == "*")? "mul" : ($2.name == "/")? "sdiv" : "udiv";
                         string operand1 = Framework::getInstance().freshTemp();
                         string operand2 = Framework::getInstance().freshTemp();
-                        codeManager.emit(operand1 + " = load " + $1.place);
-                        codeManager.emit(operand2 + " = load " + $3.place);
+                        codeManager.emit(operand1 + " = load i32, " + $1.place + ", align 4");
+                        codeManager.emit(operand2 + " = load i32, " + $3.place + ", align 4");
 
                         // division by 0 error check
                         if ($2.name == "/" || $2.name == "%"){
                             string boolZeroEquality = Framework::getInstance().freshTemp();
                             codeManager.emit(boolZeroEquality + " = icmp eq " + operand1 + ", 0");
+                            string divisionBy0ErrorLabel = Framework::getInstance().freshLabel("divisionBy0Error");
+                            string noDivisionBy0Label = Framework::getInstance().freshLabel("noDivisionBy0");
                             codeManager.emit(
                                 "br i1 " + boolZeroEquality +
-                                ", label %" + Framework::getInstance().nextRegister++ + "_divisionBy0Error" +
-                                ", label %" + Framework::getInstance().nextRegister   + "_noDivisionBy0"
-                            )
+                                ", label %" + divisionBy0ErrorLabel +
+                                ", label %" + noDivisionBy0Label
+                            );
 
-
+                            codeManager.emit(divisionBy0ErrorLabel + ":");
                             string errStr = Framework::getInstance().freshTemp();
                             codeManager.emit(errStr + " = internal constant [24 x i8] c\"Error division by zero\\0A\\00\"");
                             string errStrPtr = Framework::getInstance().freshTemp();
                             codeManager.emit(errStrPtr + " = getelementptr [24 x i8], [24 x i8]* " + errStr + ", i32 0, i32 0");
                             codeManager.emit("call void (i8*) @print(i8* " + errStrPtr + " )");
-
                             codeManager.emit("call void (i32) @exit(i32 0)");
+
+                            codeManager.emit(noDivisionBy0Label + ":");
                         }
 
                         // perform multiplication
                         string multResult = Framework::getInstance().freshTemp();
                         codeManager.emit(multResult + " = " + operation + " " + operand1 + ", " + operand2);
-                        $$.place = Framework::getInstance().freshVar();
-                        codeManager.emit("store i32 " + multResult + ", i32* " + $$.place);
+                        $$.place = "i32* " + Framework::getInstance().freshVar();
+                        codeManager.emit("store i32 " + multResult + ", " + $$.place + ", align 4");
 
                     }
                     | ID {
@@ -452,7 +455,7 @@ Exp:			LPAREN Exp RPAREN {
                         $$ = Exp("INT");
 
                         string location = Framework::getInstance().freshVar();
-                        codeManager.emit("store i32 " + $1.name + ", i32* " + location);
+                        codeManager.emit("store i32 " + $1.name + ", i32* " + location + ", align 4");
                         $$.place = "i32* " + location;
                     }
                     | NUM B {

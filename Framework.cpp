@@ -126,8 +126,8 @@ bool Framework::isFunction(const string &name) {
 
 std::string Framework::freshVar(){
     // TODO: allocate space for variable (on stack?)
-    string result = "%t" + to_string(nextRegister++);
-    codeManager.emit(result + " = alloca i32");
+    string result = "%v" + to_string(nextRegister++);
+    codeManager.emit(result + " = alloca i32" + ", align 4");
     return result;
 }
 
@@ -135,4 +135,8 @@ std::string Framework::freshTemp(){
     // TODO: allocate space for variable (on stack?)
     string result = "%t" + to_string(nextRegister++);
     return result;
+}
+
+std::string Framework::freshLabel(const std::string &name) {
+    return "label" + to_string(nextLabel++) + "_" + name;
 }

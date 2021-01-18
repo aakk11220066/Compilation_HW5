@@ -35,10 +35,12 @@ public:
 
 
 class Framework {
-public:
+protected:
     int nextRegister = 0;
+    int nextLabel = 0;
 
 public:
+    std::string freshLabel(const std::string& name);
     std::string freshVar();
     std::string freshTemp();
 
