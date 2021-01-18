@@ -1,8 +1,9 @@
 #include <assert.h>
 #include "Framework.h"
-
+#include "bp.hpp"
 #include <iostream>
 #define DEBUG_PRINT(str) std::cout << str << std::endl
+extern CodeBuffer& codeManager;
 
 //NOTE: must modify default offset of Variable to correct offset!
 Variable& Scope::insert(const Variable &newVar) {
@@ -125,5 +126,13 @@ bool Framework::isFunction(const string &name) {
 
 std::string Framework::freshVar(){
     // TODO: allocate space for variable (on stack?)
-    return "t" + (nextRegister++);
+    string result = "%t" + to_string(nextRegister++);
+    codeManager.emit(result + " = alloca i32");
+    return result;
+}
+
+std::string Framework::freshTemp(){
+    // TODO: allocate space for variable (on stack?)
+    string result = "%t" + to_string(nextRegister++);
+    return result;
 }

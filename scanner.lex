@@ -59,7 +59,7 @@ continue                    return CONTINUE;
 {in}                        return IN_RELOP;
 {relop_relational}          {
                                 yylval = NonTerminal(strdup(yytext), "");
-                                yylval.name = strdup(yytext);
+                                //yylval.name = strdup(yytext);
                                 return RELOP_RELATIONAL;
                             }
 {relop_equality}            {

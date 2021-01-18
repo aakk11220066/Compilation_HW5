@@ -7,7 +7,7 @@
 	#include "Symbol.h"
 	#include "Exceptions.h"
     #include "source.h"
-    #include "bp.cpp"
+    #include "bp.hpp"
 
     #define YYSTYPE NonTerminal
     extern list<string> varsListToTypesList(const list<Variable>& varList);
@@ -17,7 +17,7 @@
     void yyerror(const char*);
     bool isInWhile = false;
 
-    CodeBuffer codeManager = CodeBuffer();
+    CodeBuffer& codeManager = CodeBuffer::instance();
 
     void myExit(){
          Framework::getInstance().exitOnError = true;
@@ -190,7 +190,7 @@ Funcs:			/*epsilon*/ {}
 FuncDecl:		RetType
                 ID {
                     Framework::getInstance().addScope(Scope::FUNCTION);
-                    Framework::getInstance().addFunction(Function(yylval.name,$1.type));
+                    Framework::getInstance().addFunction(Function($2.name,$1.type));
                 }
                 LPAREN
                 Formals {
@@ -223,13 +223,13 @@ FormalsList:	FormalDecl {
                     $$.namesAndTypes = formalsList.namesAndTypes;
                 }
                     | FormalDecl COMMA FormalsList{$$ = $3; $$.namesAndTypes.push_front(Variable($1.name, $1.type));} ;
-FormalDecl:		Type ID {$$ = FormalDecl(yylval.name, $1.type);} ;
+FormalDecl:		Type ID {$$ = FormalDecl($2.name, $1.type);} ;
 Statements:		Statement {$$ = Statements($1.type);}
                     | Statements Statement{} ; // TODO: backpatch
 Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                 Statements {Framework::getInstance().popScope();}
                 RBRACE {}
-                    | Type ID SC { Framework::getInstance().insertVariableIntoTopScope(Variable(yylval.name,$1.type));}
+                    | Type ID SC { Framework::getInstance().insertVariableIntoTopScope(Variable($2.name,$1.type));}
                     | Type ID ASSIGN Exp SC {
                             Framework::getInstance().insertVariableIntoTopScope(Variable($2.name,$1.type));
                             assignTypeCheck($1.type,$4.type);
@@ -325,13 +325,13 @@ Call:			ID
                     | ID LPAREN RPAREN {
 
                         try{
-                               string type = Framework::getInstance()[yylval.name].type;
-                               if (!Framework::getInstance().isFunction(yylval.name)) throw Exceptions::IdentifierDoesNotExistException(yylineno, yylval.name);
+                               string type = Framework::getInstance()[$1.name].type;
+                               if (!Framework::getInstance().isFunction($1.name)) throw Exceptions::IdentifierDoesNotExistException(yylineno, $1.name);
 
-                               $$ = Call (yylval.name, type);
+                               $$ = Call ($1.name, type);
                         }
                         catch(Exceptions::IdentifierDoesNotExistException &e){
-                            output::errorUndefFunc(yylineno, yylval.name);
+                            output::errorUndefFunc(yylineno, $1.name);
                             myExit();
                         }
                     }; // TODO: generate jump code, request backpatching
@@ -360,47 +360,83 @@ Exp:			LPAREN Exp RPAREN {
                         string res_type = typeBinopAddChecking($1.type, $3.type);
                         $$ = Exp(res_type);
 
+                        string operation = ($2.name == "+")? "add" : "sub";
+                        string operand1 = Framework::getInstance().freshTemp();
+                        string operand2 = Framework::getInstance().freshTemp();
+                        codeManager.emit(operand1 + " = load " + $1.place);
+                        codeManager.emit(operand2 + " = load " + $3.place);
+                        string addResult = Framework::getInstance().freshTemp();
+                        codeManager.emit(addResult + " = " + operation + " " + operand1 + ", " + operand2);
                         $$.place = Framework::getInstance().freshVar();
-                        codeManager.emit($$.place + " = " + $1.place + $2.name + $3.place);
-                    } //DONE: emit code for calculating, call freshVar
+                        codeManager.emit("store i32 " + addResult + ", i32* " + $$.place);
+                    }
                     | Exp BINOP_MULTIPLICATIVE Exp {
                         string res_type = typeBinopMultiplicativeChecking($1.type, $3.type);
                         $$ = Exp(res_type);
 
-                        $$.place = Framework::getInstance().freshVar();
-                        if ($2.name == "/"){
-                            string errStr = freshVar();
+                        // load operands
+                        string operation = ($2.name == "*")? "mul" : ($2.name == "/")? "sdiv" : "udiv";
+                        string operand1 = Framework::getInstance().freshTemp();
+                        string operand2 = Framework::getInstance().freshTemp();
+                        codeManager.emit(operand1 + " = load " + $1.place);
+                        codeManager.emit(operand2 + " = load " + $3.place);
+
+                        // division by 0 error check
+                        if ($2.name == "/" || $2.name == "%"){
+                            string boolZeroEquality = Framework::getInstance().freshTemp();
+                            codeManager.emit(boolZeroEquality + " = icmp eq " + operand1 + ", 0");
+                            codeManager.emit(
+                                "br i1 " + boolZeroEquality +
+                                ", label %" + Framework::getInstance().nextRegister++ + "_divisionBy0Error" +
+                                ", label %" + Framework::getInstance().nextRegister   + "_noDivisionBy0"
+                            )
+
+
+                            string errStr = Framework::getInstance().freshTemp();
                             codeManager.emit(errStr + " = internal constant [24 x i8] c\"Error division by zero\\0A\\00\"");
-                            string errStrPtr = freshVar();
+                            string errStrPtr = Framework::getInstance().freshTemp();
                             codeManager.emit(errStrPtr + " = getelementptr [24 x i8], [24 x i8]* " + errStr + ", i32 0, i32 0");
                             codeManager.emit("call void (i8*) @print(i8* " + errStrPtr + " )");
 
                             codeManager.emit("call void (i32) @exit(i32 0)");
                         }
-                        codeManager.emit($$.place + ":=" + $1.place + $2.name + $3.place);
-                    } //DONE: emit code for calculating, check for division by 0, call freshVar
+
+                        // perform multiplication
+                        string multResult = Framework::getInstance().freshTemp();
+                        codeManager.emit(multResult + " = " + operation + " " + operand1 + ", " + operand2);
+                        $$.place = Framework::getInstance().freshVar();
+                        codeManager.emit("store i32 " + multResult + ", i32* " + $$.place);
+
+                    }
                     | ID {
                             try{
-                                $$ =  Exp(Framework::getInstance()[yylval.name].type);
-                                if (Framework::getInstance().isFunction(yylval.name)){
-                                    output::errorUndef(yylineno, yylval.name);
+                                $$ =  Exp(Framework::getInstance()[$1.name].type);
+                                if (Framework::getInstance().isFunction($1.name)){
+                                    output::errorUndef(yylineno, $1.name);
                                     myExit();
                                 }
                             }
                             catch(Exceptions::IdentifierDoesNotExistException &e){
-                                output::errorUndef(yylineno, yylval.name);
+                                output::errorUndef(yylineno, $1.name);
                                 myExit();
                             }
                     }
                     | Call {$$ =  Exp($1.type);}
-                    | NUM {$$ = Exp("INT");}
+                    | NUM {
+                        $$ = Exp("INT");
+
+                        string location = Framework::getInstance().freshVar();
+                        codeManager.emit("store i32 " + $1.name + ", i32* " + location);
+                        $$.place = "i32* " + location;
+                    }
                     | NUM B {
-                        if (!isByteSize(yylval.name)){
-                            output::errorByteTooLarge(yylineno, yylval.name);
+                        if (!isByteSize($1.name)){
+                            output::errorByteTooLarge(yylineno, $1.name);
                             myExit();
                         }
                         $$ =  Exp("BYTE");
-                     }
+                        $$.place = "i32 " + $1.name;
+                    }
                     | STRING {$$ =  Exp("STRING");}
                     | TRUE {$$ =  Exp("BOOL");}
                     | FALSE {$$ =  Exp("BOOL");}
@@ -497,4 +533,6 @@ int main(){
         output::errorMainMissing();
         myExit();
     }
+
+    codeManager.printCodeBuffer();
 }

@@ -22,6 +22,7 @@ public:
     NonTerminal& operator=(const NonTerminal& other){
         name = other.name;
         type = other.type;
+        place = other.place;
         namesAndTypes = other.namesAndTypes;
         arrguments_list = other.arrguments_list;
         return *this;
