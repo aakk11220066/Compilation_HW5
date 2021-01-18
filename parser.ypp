@@ -162,6 +162,15 @@
         }
         return true;
     }
+
+    string placesListToString(const list<string> places_list){
+        result = "";
+        for (const string& param : places_list){
+            result += "i32* "
+            result += param.register + " ";
+        }
+        return result;
+    }
 %}
 
 %right ASSIGN
@@ -316,6 +325,18 @@ Call:			ID
                                 myExit();
                             }
                             $$ = Call ($1.name, type);
+
+                            string argument_list = placesListToString($3.places_list);
+                            string operand = Framework::getInstance().freshTemp();
+                            string return_type;
+                            if (type == "VOID"){
+                                return_type = "void";
+                            }
+                            else{
+                                return_type = "i32"
+                            }
+                            codeManager.emit(operand + " = call " + return_type + " @" + $1.name + "(" + argument_list + ")");
+
                         }
                         catch(Exceptions::IdentifierDoesNotExistException &e){
                             output::errorUndefFunc(yylineno, $1.name);
@@ -329,6 +350,8 @@ Call:			ID
                                if (!Framework::getInstance().isFunction($1.name)) throw Exceptions::IdentifierDoesNotExistException(yylineno, $1.name);
 
                                $$ = Call ($1.name, type);
+                               string return_type = "void";
+                               codeManager.emit("call " + return_type + " @" + $1.name + "()");
                         }
                         catch(Exceptions::IdentifierDoesNotExistException &e){
                             output::errorUndefFunc(yylineno, $1.name);
@@ -337,10 +360,13 @@ Call:			ID
                     }; // TODO: generate jump code, request backpatching
 ExpList:		Exp {   $$ = ExpList();
                         $$.arrguments_list.push_front($1.type);
+                        $$.places_list.push_front($1.place);
                      } //TODO: call freshVar
                     | Exp COMMA ExpList {
                         $$ = $3;
                         $$.arrguments_list.push_front($1.type);
+                        $$.places_list.push_front($1.place);
+
                     } //TODO: call freshVar
 Type:			INT {$$ = Type("INT");}
                     | BYTE{$$ =  Type("BYTE");}

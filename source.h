@@ -17,6 +17,8 @@ public:
     string place = "";
     list<Variable> namesAndTypes = list<Variable>();
     list<string> arrguments_list = list<string>();
+    list<string> places_list = list<string>();
+
     NonTerminal() = default;
     NonTerminal(const string& name, const string& type) : name(name), type(type) {}
     NonTerminal& operator=(const NonTerminal& other){
