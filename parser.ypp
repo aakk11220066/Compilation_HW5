@@ -166,7 +166,7 @@
     string placesListToString(const list<string> places_list){
         string result = "";
         for (const string& param : places_list){
-            //result += "i32* ";
+            result += "i32* ";
             result += param + " ";
         }
         return result;
@@ -213,9 +213,20 @@ FuncDecl:		RetType
                     }
                 }
                 RPAREN
-                LBRACE
+                LBRACE {
+                    string retType = ($1.type == "VOID")? "void" : "i32";
+                    string params = "";
+                    if (!$5.namesAndTypes.empty()) {
+                        for (const Variable& param : $5.namesAndTypes){
+                            params += string(", ") + param.LLVM_register;
+                        }
+                        params = params.substr(2);
+                    }
+                    codeManager.emitFuncOpen($2.name, retType, params);
+                }
                 Statements
                 RBRACE {
+                    codeManager.emitFuncClose();
                     Framework::getInstance().popScope();
                 };
 RetType:		Type {$$ = RetType($1.type);}
@@ -242,7 +253,7 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                     | Type ID ASSIGN Exp SC {
                             Framework::getInstance().insertVariableIntoTopScope(Variable($2.name,$1.type));
                             assignTypeCheck($1.type,$4.type);
-                    } //TODO: update Variable.LLVM_register, call freshVar, transfer data into register
+                    } //TODO: update Variable.LLVM_register, call freshVar, transfer data into register, check if boolean and if so use phi
                     | ID ASSIGN Exp SC {
                         string accepting_type = Framework::getInstance()[$1.name].type;
                         assignTypeCheck(accepting_type, $3.type);
@@ -250,7 +261,7 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                             output::errorUndef(yylineno, $1.name);
                             myExit();
                         }
-                    } //TODO: update Variable.LLVM_register, call freshVar, transfer data into register
+                    } //TODO: update Variable.LLVM_register, call freshVar, transfer data into register, check if boolean and if so use phi
 
                     | Call SC {}
                     | RETURN SC { // TODO: generate jump code, request backpatching
@@ -260,8 +271,8 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                             myExit();
                         }
                         $$ = Statement("VOID");
-                        codeManager.emit("ret void");
 
+                        codeManager.emit("ret void");
                     }
                     | RETURN Exp SC {
                         const string& last_function_type = Framework::getInstance().getLastAddedFunction().type;
@@ -335,11 +346,13 @@ Call:			ID
                             string return_type;
                             if (type == "VOID"){
                                 return_type = "void";
+                                codeManager.emit("call " + return_type + " @" + $1.name + "(" + argument_list + ")");
                             }
                             else{
                                 return_type = "i32";
+                                codeManager.emit(operand + " = call " + return_type + " @" + $1.name + "(" + argument_list + ")");
+                                $$.place = operand;
                             }
-                            codeManager.emit(operand + " = call " + return_type + " @" + $1.name + "(" + argument_list + ")");
 
                         }
                         catch(Exceptions::IdentifierDoesNotExistException &e){
@@ -393,12 +406,12 @@ Exp:			LPAREN Exp RPAREN {
                         string operation = ($2.name == "+")? "add" : "sub";
                         string operand1 = Framework::getInstance().freshTemp();
                         string operand2 = Framework::getInstance().freshTemp();
-                        codeManager.emit(operand1 + " = load i32, " + $1.place + ", align 4");
-                        codeManager.emit(operand2 + " = load i32, " + $3.place + ", align 4");
+                        codeManager.emitLoad($1.place, operand1);
+                        codeManager.emitLoad($3.place, operand2);
                         string addResult = Framework::getInstance().freshTemp();
-                        codeManager.emit(addResult + " = " + operation + " " + operand1 + ", " + operand2);
-                        $$.place = "i32* " + Framework::getInstance().freshVar();
-                        codeManager.emit("store i32 " + addResult + ", " + $$.place + ", align 4");
+                        codeManager.emitBinop(operand1, operand2, addResult, operation);
+                        $$.place = Framework::getInstance().freshVar();
+                        codeManager.emitStore(addResult, $$.place);
                     }
                     | Exp BINOP_MULTIPLICATIVE Exp {
                         string res_type = typeBinopMultiplicativeChecking($1.type, $3.type);
@@ -408,37 +421,32 @@ Exp:			LPAREN Exp RPAREN {
                         string operation = ($2.name == "*")? "mul" : ($2.name == "/")? "sdiv" : "udiv";
                         string operand1 = Framework::getInstance().freshTemp();
                         string operand2 = Framework::getInstance().freshTemp();
-                        codeManager.emit(operand1 + " = load i32, " + $1.place + ", align 4");
-                        codeManager.emit(operand2 + " = load i32, " + $3.place + ", align 4");
+                        codeManager.emitLoad($1.place, operand1);
+                        codeManager.emitLoad($3.place, operand2);
 
                         // division by 0 error check
                         if ($2.name == "/" || $2.name == "%"){
                             string boolZeroEquality = Framework::getInstance().freshTemp();
-                            codeManager.emit(boolZeroEquality + " = icmp eq " + operand1 + ", 0");
+                            codeManager.emitCond("eq", operand1, "0", boolZeroEquality);
                             string divisionBy0ErrorLabel = Framework::getInstance().freshLabel("divisionBy0Error");
-                            string noDivisionBy0Label = Framework::getInstance().freshLabel("noDivisionBy0");
-                            codeManager.emit(
-                                "br i1 " + boolZeroEquality +
-                                ", label %" + divisionBy0ErrorLabel +
-                                ", label %" + noDivisionBy0Label
-                            );
+                            string noDivisionBy0Label = Framework::getInstance().freshLabel("noDivisionBy0Error");
+                            codeManager.emitIf(boolZeroEquality, divisionBy0ErrorLabel, noDivisionBy0Label);
 
-                            codeManager.emit(divisionBy0ErrorLabel + ":");
-                            string errStr = Framework::getInstance().freshTemp();
-                            codeManager.emit(errStr + " = internal constant [24 x i8] c\"Error division by zero\\0A\\00\"");
+                            codeManager.emitLabel(divisionBy0ErrorLabel);
+                            string errStr = Framework::getInstance().freshString("Error division by zero");
                             string errStrPtr = Framework::getInstance().freshTemp();
-                            codeManager.emit(errStrPtr + " = getelementptr [24 x i8], [24 x i8]* " + errStr + ", i32 0, i32 0");
+                            codeManager.emit(errStrPtr + " = getelementptr [24 x i8], [24 x i8]* @" + errStr + ", i32 0, i32 0");
                             codeManager.emit("call void (i8*) @print(i8* " + errStrPtr + " )");
                             codeManager.emit("call void (i32) @exit(i32 0)");
-
-                            codeManager.emit(noDivisionBy0Label + ":");
+                            codeManager.emitJmp(noDivisionBy0Label);
+                            codeManager.emitLabel(noDivisionBy0Label);
                         }
 
                         // perform multiplication
                         string multResult = Framework::getInstance().freshTemp();
-                        codeManager.emit(multResult + " = " + operation + " " + operand1 + ", " + operand2);
-                        $$.place = "i32* " + Framework::getInstance().freshVar();
-                        codeManager.emit("store i32 " + multResult + ", " + $$.place + ", align 4");
+                        codeManager.emitBinop(operand1, operand2, multResult, operation);
+                        $$.place = Framework::getInstance().freshVar();
+                        codeManager.emitStore(multResult, $$.place);
 
                     }
                     | ID {
@@ -453,14 +461,20 @@ Exp:			LPAREN Exp RPAREN {
                                 output::errorUndef(yylineno, $1.name);
                                 myExit();
                             }
+
+                            $$.place = dynamic_cast<Variable&>(Framework::getInstance()[$1.name]).LLVM_register;
                     }
-                    | Call {$$ =  Exp($1.type);}
+                    | Call {
+                        $$ =  Exp($1.type);
+
+                        $$.place = $1.place;
+                    }
                     | NUM {
                         $$ = Exp("INT");
 
                         string location = Framework::getInstance().freshVar();
-                        codeManager.emit("store i32 " + $1.name + ", i32* " + location + ", align 4");
-                        $$.place = "i32* " + location;
+                        codeManager.emitStore($1.name, location);
+                        $$.place = location;
                     }
                     | NUM B {
                         if (!isByteSize($1.name)){
@@ -468,11 +482,28 @@ Exp:			LPAREN Exp RPAREN {
                             myExit();
                         }
                         $$ =  Exp("BYTE");
-                        $$.place = "i32 " + $1.name;
+
+                        string location = Framework::getInstance().freshVar();
+                        codeManager.emitStore($1.name, location);
+                        $$.place = location;
                     }
-                    | STRING {$$ =  Exp("STRING");}
-                    | TRUE {$$ =  Exp("BOOL");}
-                    | FALSE {$$ =  Exp("BOOL");}
+                    | STRING {
+                        $$ = Exp("STRING");
+
+                        string txt = $1.name;
+                        string location = Framework::getInstance().freshString(txt.substr(1, txt.length()-2));
+                        $$.place = location;
+                    }
+                    | TRUE {
+                        $$ =  Exp("BOOL");
+
+                        $$.trueList = codeManager.makelist(codeManager.emitJmp("@"));
+                    }
+                    | FALSE {
+                        $$ =  Exp("BOOL");
+
+                        $$.falseList = codeManager.makelist(codeManager.emitJmp("@"));
+                    }
                     | NOT Exp {
                         if($2.type != "BOOL"){
                              output::errorMismatch(yylineno);
@@ -481,7 +512,10 @@ Exp:			LPAREN Exp RPAREN {
                         else{
                             $$ =  Exp("BOOL");
                         }
-                    } // TODO: swap truelist and falselist of Exp
+
+                        $$.falseList = $2.trueList;
+                        $$.trueList = $2.falseList;
+                    }
                     | Exp AND Exp { //TODO: emit code for calculating, short-circuit after AND token (request backpatching)
                         if($1.type != "BOOL" || $3.type != "BOOL"){
                              output::errorMismatch(yylineno);
@@ -508,7 +542,29 @@ Exp:			LPAREN Exp RPAREN {
                         else{
                             $$ =  Exp ("BOOL");
                         }
-                    } //TODO: emit code for calculating, call freshvar
+
+                        //select operation
+                        string operation = "YIKES";
+                        if ($2.name == ">") operation = "sgt";
+                        if ($2.name == "<") operation = "slt";
+                        if ($2.name == ">=") operation = "sge";
+                        if ($2.name == "<=") operation = "sle";
+
+                        //load operands
+                        string operand1 = Framework::getInstance().freshTemp();
+                        string operand2 = Framework::getInstance().freshTemp();
+                        codeManager.emitLoad($1.place, operand1);
+                        codeManager.emitLoad($3.place, operand2);
+
+                        //test for relation
+                        string boolRelation = Framework::getInstance().freshTemp();
+                        codeManager.emitCond(operation, operand1, operand2, boolRelation);
+
+                        //jump accordingly
+                        pair<bpatch_address, bpatch_address> bpatchRequests = codeManager.emitIf(boolRelation, "@", "@");
+                        $$.trueList = codeManager.makelist(bpatchRequests.first);
+                        $$.falseList = codeManager.makelist(bpatchRequests.second);
+                    }
                     |Exp IN_RELOP Exp {
                         if(($1.type != "INT" && $1.type != "BYTE") || ($3.type != "SET")){
                              output::errorMismatch(yylineno);
@@ -517,7 +573,7 @@ Exp:			LPAREN Exp RPAREN {
                         else{
                             $$ =  Exp ("BOOL");
                         }
-                    } //TODO: emit code for calculating, call freshvar
+                    } //TODO: emit code for calculating, jump accordingly
                     | Exp RELOP_EQUALITY Exp {
                         if(($1.type != "INT" && $1.type != "BYTE") || ($3.type != "INT" && $3.type != "BYTE")){
                              output::errorMismatch(yylineno);
@@ -526,7 +582,23 @@ Exp:			LPAREN Exp RPAREN {
                         else{
                             $$ =  Exp ("BOOL");
                         }
-                    } //TODO: emit code for calculating, call freshvar
+
+                        //load operands
+                        string operation = ($2.name == "==")? "eq" : "ne";
+                        string operand1 = Framework::getInstance().freshTemp();
+                        string operand2 = Framework::getInstance().freshTemp();
+                        codeManager.emitLoad($1.place, operand1);
+                        codeManager.emitLoad($3.place, operand2);
+
+                        //test for (in)equality
+                        string boolEquality = Framework::getInstance().freshTemp();
+                        codeManager.emitCond(operation, operand1, operand2, boolEquality);
+
+                        //jump accordingly
+                        pair<bpatch_address, bpatch_address> bpatchRequests = codeManager.emitIf(boolEquality, "@", "@");
+                        $$.trueList.push_back(bpatchRequests.first);
+                        $$.falseList.push_back(bpatchRequests.second);
+                    }
                     | LPAREN Type RPAREN Exp {
                         if($2.type != "INT" || $4.type !="SET"){
                              output::errorMismatch(yylineno);
@@ -535,6 +607,8 @@ Exp:			LPAREN Exp RPAREN {
                         else{
                             $$ =  Exp("INT");
                         }
+
+                        $$.place = $4.place;
                     };
 marker_RPAREN:      /*epsilon*/ {Framework::getInstance().addScope(Scope::IF);}
 marker_STATEMENT:   /*epsilon*/ {Framework::getInstance().popScope();}
@@ -548,10 +622,23 @@ void yyerror(const char*){
 
 int main(){
     try{
-        codeManager.emit("define void @printi(i32) {call i32 (i8*, ...) @printf(i8* getelementptr ([4 x i8], \
-                        [4 x i8]* @.int_specifier, i32 0, i32 0), i32 %0) ret void} ");
-        codeManager.emit("define void @print(i8*) {call i32 (i8*, ...) @printf(i8* getelementptr ([4 x i8], \
-                        [4x i8]* @.str_specifier, i32 0, i32 0), i8* %0)ret void}");
+        // declare externs
+        codeManager.emitGlobal( "declare void @exit(i32)" );
+        codeManager.emitGlobal( "declare i32 @printf(i8*, ...)" );
+
+        // function printi definition:
+        codeManager.emitGlobal("@.int_specifier = internal constant [4 x i8] c\"%d\\0A\\00\"");
+        codeManager.emitGlobal(
+                string("define void @printi(i32) {call i32 (i8*, ...) @printf(i8* getelementptr ([4 x i8], ") +
+                "[4 x i8]* @.int_specifier, i32 0, i32 0), i32 %0) ret void}"
+        );
+        //function print definition:
+        codeManager.emitGlobal("@.str_specifier = internal constant [4 x i8] c\"%s\\0A\\00\"");
+        codeManager.emitGlobal(
+                string("define void @print(i8*) {call i32 (i8*, ...) @printf(i8* getelementptr ([4 x i8], ") +
+                "[4 x i8]* @.str_specifier, i32 0, i32 0), i8* %0) ret void}"
+        );
+
         yyparse();
     }
     catch (const Exceptions::AlreadyExistsException& e){
@@ -572,5 +659,6 @@ int main(){
         myExit();
     }
 
+    codeManager.printGlobalBuffer();
     codeManager.printCodeBuffer();
 }

@@ -43,6 +43,8 @@ public:
     std::string freshLabel(const std::string& name);
     std::string freshVar();
     std::string freshTemp();
+    std::string freshVarBool();
+    std::string freshString(const string& str);
 
     std::stack<Scope> scopes;
     std::deque<Function> functions;

@@ -10,6 +10,8 @@ using namespace std;
 //for an unconditional branch (which contains only a single label) use FIRST.
 enum BranchLabelIndex {FIRST, SECOND};
 
+typedef pair<int,BranchLabelIndex> bpatch_address;
+
 class CodeBuffer{
 	CodeBuffer();
 	CodeBuffer(CodeBuffer const&);
@@ -58,6 +60,18 @@ public:
 	//print the content of the global buffer to stdout
 	void printGlobalBuffer();
 
+	//********* Wrapper methods for various emits ********* //
+	void emitLoad(const string& src, const string& dest);
+	void emitLoadBool(const string& src, const string& dest);
+	void emitStore(const string& src, const string& dest);
+	void emitStoreBool(const string& src, const string& dest);
+	void emitBinop(const string& src1, const string& src2, const string& dest, const string& binop);
+	void emitLabel(const string& name);
+	void emitCond(const string &operation, const string &src1, const string &src2, const string &dest);
+	pair<bpatch_address, bpatch_address> emitIf(const string& cond, const string& ifTrueLabel, const string& ifFalseLabel);
+	bpatch_address emitJmp(const string& dest);
+	void emitFuncOpen(const string& name, const string& retType, const string& params);
+	void emitFuncClose();
 };
 
 #endif

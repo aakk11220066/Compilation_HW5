@@ -72,13 +72,11 @@ Framework::Framework() {
     printFunction.params.emplace_back(Variable("stringToPrint", "STRING"));
     addFunction(printFunction);
     addParamToLastFunc(printFunction.params.back());
-    // TODO: generate code for print (taken from assignment)
 
     Function printiFunction = Function("printi", "VOID");
     printiFunction.params.emplace_back(Variable("intToPrint", "INT"));
     addFunction(Function("printi",  "VOID"));
     addParamToLastFunc(printiFunction.params.back());
-    // TODO: generate code for printi (taken from assignment)
 }
 
 Framework singleton = Framework();
@@ -124,19 +122,34 @@ bool Framework::isFunction(const string &name) {
     return false;
 }
 
+
+
+std::string Framework::freshVarBool() {
+    string result = "%v" + to_string(nextRegister++);
+    codeManager.emit(result + " = alloca i1" + ", align 4");
+    return result;
+}
+
 std::string Framework::freshVar(){
-    // TODO: allocate space for variable (on stack?)
     string result = "%v" + to_string(nextRegister++);
     codeManager.emit(result + " = alloca i32" + ", align 4");
     return result;
 }
 
 std::string Framework::freshTemp(){
-    // TODO: allocate space for variable (on stack?)
     string result = "%t" + to_string(nextRegister++);
     return result;
 }
 
 std::string Framework::freshLabel(const std::string &name) {
     return "label" + to_string(nextLabel++) + "_" + name;
+}
+
+std::string Framework::freshString(const string& str) {
+    string result = "%str_ptr" + to_string(nextRegister);
+    string hardCodedStr = "@.str" + to_string(nextRegister++);
+    string finalLength = to_string(str.length() + 2);
+    codeManager.emitGlobal(hardCodedStr + " = internal constant [" + finalLength + " x i8] c\"" + str + "\\0A\\00\"");
+    codeManager.emit(result + " = getelementptr [" + finalLength + " x i8], [" + finalLength + " x i8]* " + hardCodedStr + ", i32 0, i32 0");
+    return result;
 }

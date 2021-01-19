@@ -88,7 +88,11 @@ continue                    return CONTINUE;
                                 yylval.name = strdup(yytext);
                                 return NUM;
                             }
-{good_string}               return STRING;
+{good_string}               {
+                            yylval = NonTerminal(strdup(yytext), "");
+                            yylval.name = strdup(yytext);
+                            return STRING;
+                            }
 {space}                     ;
 .                           {output::errorLex(yylineno); myExit();}
 

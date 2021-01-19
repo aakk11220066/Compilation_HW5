@@ -6,7 +6,10 @@
 #include <iostream>
 using namespace std;
 
+#include "bp.hpp"
 #include "Symbol.h"
+
+typedef vector<pair<int,BranchLabelIndex>> bpatch_list;
 
 void myExit();
 
@@ -18,6 +21,9 @@ public:
     list<Variable> namesAndTypes = list<Variable>();
     list<string> arrguments_list = list<string>();
     list<string> places_list = list<string>();
+    bpatch_list trueList = bpatch_list();
+    bpatch_list falseList = bpatch_list();
+    bpatch_list nextList = bpatch_list();
 
     NonTerminal() = default;
     NonTerminal(const string& name, const string& type) : name(name), type(type) {}
@@ -28,6 +34,9 @@ public:
         namesAndTypes = other.namesAndTypes;
         arrguments_list = other.arrguments_list;
         places_list = other.places_list;
+        trueList = other.trueList;
+        falseList = other.falseList;
+        nextList = other.nextList;
         return *this;
     };
 };
