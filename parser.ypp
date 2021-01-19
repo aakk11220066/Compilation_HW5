@@ -529,16 +529,13 @@ Exp:			LPAREN Exp RPAREN {
                         $$.falseList = $2.trueList;
                         $$.trueList = $2.falseList;
                     }
-                    | Exp AND Exp { //TODO: emit code for calculating, short-circuit after AND token (request backpatching)
-                        if($1.type != "BOOL" || $3.type != "BOOL"){
-                             output::errorMismatch(yylineno);
-                             myExit();
-                       }
-                       else{
-                           $$ =  Exp("BOOL");
-                       }
+                    | Exp
+                    AND {
+                        string& eval2ndExpLabel = Framework::getInstance().freshLabel("eval2ndExp");
+                        codeManager.emitLabel(eval2ndExpLabel);
+                        $3.name = eval2ndExpLabel;
                     }
-                    | Exp OR Exp{ //TODO: emit code for calculating, short-circuit after OR token (request backpatching)
+                    Exp {
                         if($1.type != "BOOL" || $3.type != "BOOL"){
                              output::errorMismatch(yylineno);
                              myExit();
@@ -546,6 +543,28 @@ Exp:			LPAREN Exp RPAREN {
                        else{
                            $$ =  Exp("BOOL");
                        }
+
+
+                    }
+                    | Exp
+                    OR {
+                        string& eval2ndExpLabel = Framework::getInstance().freshLabel("eval2ndExp");
+                        codeManager.emitLabel(eval2ndExpLabel);
+                        $3.name = eval2ndExpLabel;
+                    }
+                    Exp{ //TODO: emit code for calculating, short-circuit after OR token (request backpatching)
+                        if($1.type != "BOOL" || $4.type != "BOOL"){
+                             output::errorMismatch(yylineno);
+                             myExit();
+                       }
+                       else{
+                           $$ =  Exp("BOOL");
+                       }
+
+                       string& eval2ndExpLabel = $3.name;
+                       $$.trueList = codeManager.merge($1.trueList, $4.trueList);
+                       $$.falseList = $4.falseList;
+                       codeManager.bpatch($1.falseList, eval2ndExpLabel);
                     }
                     | Exp RELOP_RELATIONAL Exp {
                         if(($1.type != "INT" && $1.type != "BYTE") || ($3.type != "INT" && $3.type != "BYTE")){
@@ -586,7 +605,27 @@ Exp:			LPAREN Exp RPAREN {
                         else{
                             $$ =  Exp ("BOOL");
                         }
-                    } //TODO: emit code for calculating, jump accordingly
+
+                        // load operands
+                        string operand1 = Framework::getInstance().freshTemp();
+                        string operand2 = Framework::getInstance().freshTemp();
+                        codeManager.emitLoad($1.place, operand1);
+                        emit(operand2 + " = load [256 x i1], [256 x i1]* " + $3.place); //load set
+
+                        // TODO: check within range
+
+                        // check if in set
+                        string locationPtr = Framework::getInstance().freshTemp();
+                        codeManager.emit(locationPtr + " = getelementptr [256 x i1], [256 x i1]* " + operand2 +
+                            ", i32 " + operand1 + ", i1 0");
+                        string boolInclusion = Framework::getInstance().freshTemp(); //TODO: remove boolean register boolInclusion
+                        emit(boolInclusion + " = load i1, i1* " + locationPtr); //load i1
+
+                        //jump accordingly
+                        pair<bpatch_address, bpatch_address> bpatchRequests = codeManager.emitIf(boolEquality, "@", "@");
+                        $$.trueList.push_back(bpatchRequests.first);
+                        $$.falseList.push_back(bpatchRequests.second);
+                    }
                     | Exp RELOP_EQUALITY Exp {
                         if(($1.type != "INT" && $1.type != "BYTE") || ($3.type != "INT" && $3.type != "BYTE")){
                              output::errorMismatch(yylineno);
