@@ -65,6 +65,7 @@ public:
 	void emitLoadBool(const string& src, const string& dest);
 	void emitStore(const string& src, const string& dest);
 	void emitStoreBool(const string& src, const string& dest);
+	void emitTransfer(const string& src, const string& dest);
 	void emitBinop(const string& src1, const string& src2, const string& dest, const string& binop);
 	void emitLabel(const string& name);
 	void emitCond(const string &operation, const string &src1, const string &src2, const string &dest);

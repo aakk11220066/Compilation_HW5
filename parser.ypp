@@ -416,14 +416,11 @@ Exp:			LPAREN Exp RPAREN {
                         $$ = Exp(res_type);
 
                         string operation = ($2.name == "+")? "add" : "sub";
-                        string operand1 = Framework::getInstance().freshTemp();
-                        string operand2 = Framework::getInstance().freshTemp();
-                        codeManager.emitLoad($1.place, operand1);
-                        codeManager.emitLoad($3.place, operand2);
+                        string operand1 = $1.place;
+                        string operand2 = $3.place;
                         string addResult = Framework::getInstance().freshTemp();
                         codeManager.emitBinop(operand1, operand2, addResult, operation);
-                        $$.place = Framework::getInstance().freshVar();
-                        codeManager.emitStore(addResult, $$.place);
+                        $$.place = addResult;
                     }
                     | Exp BINOP_MULTIPLICATIVE Exp {
                         string res_type = typeBinopMultiplicativeChecking($1.type, $3.type);
@@ -431,24 +428,22 @@ Exp:			LPAREN Exp RPAREN {
 
                         // load operands
                         string operation = ($2.name == "*")? "mul" : ($2.name == "/")? "sdiv" : "udiv";
-                        string operand1 = Framework::getInstance().freshTemp();
-                        string operand2 = Framework::getInstance().freshTemp();
-                        codeManager.emitLoad($1.place, operand1);
-                        codeManager.emitLoad($3.place, operand2);
+                        string operand1 = $1.place;
+                        string operand2 = $3.place;
 
                         // division by 0 error check
                         if ($2.name == "/" || $2.name == "%"){
                             string boolZeroEquality = Framework::getInstance().freshTemp();
-                            codeManager.emitCond("eq", operand1, "0", boolZeroEquality);
+                            codeManager.emitCond("eq", operand2, "0", boolZeroEquality);
                             string divisionBy0ErrorLabel = Framework::getInstance().freshLabel("divisionBy0Error");
                             string noDivisionBy0Label = Framework::getInstance().freshLabel("noDivisionBy0Error");
                             codeManager.emitIf(boolZeroEquality, divisionBy0ErrorLabel, noDivisionBy0Label);
 
                             codeManager.emitLabel(divisionBy0ErrorLabel);
                             string errStr = Framework::getInstance().freshString("Error division by zero");
-                            string errStrPtr = Framework::getInstance().freshTemp();
-                            codeManager.emit(errStrPtr + " = getelementptr [24 x i8], [24 x i8]* @" + errStr + ", i32 0, i32 0");
-                            codeManager.emit("call void (i8*) @print(i8* " + errStrPtr + " )");
+                            //string errStrPtr = Framework::getInstance().freshTemp();
+                            //codeManager.emit(errStrPtr + " = getelementptr [24 x i8], [24 x i8]* " + errStr + ", i32 0, i32 0");
+                            codeManager.emit("call void (i8*) @print(i8* " + errStr + " )");
                             codeManager.emit("call void (i32) @exit(i32 0)");
                             codeManager.emitJmp(noDivisionBy0Label);
                             codeManager.emitLabel(noDivisionBy0Label);
@@ -457,9 +452,7 @@ Exp:			LPAREN Exp RPAREN {
                         // perform multiplication
                         string multResult = Framework::getInstance().freshTemp();
                         codeManager.emitBinop(operand1, operand2, multResult, operation);
-                        $$.place = Framework::getInstance().freshVar();
-                        codeManager.emitStore(multResult, $$.place);
-
+                        $$.place = multResult;
                     }
                     | ID {
                         try{
@@ -484,8 +477,8 @@ Exp:			LPAREN Exp RPAREN {
                     | NUM {
                         $$ = Exp("INT");
 
-                        string location = Framework::getInstance().freshVar();
-                        codeManager.emitStore($1.name, location);
+                        string location = Framework::getInstance().freshTemp();
+                        codeManager.emitTransfer($1.name, location);
                         $$.place = location;
                     }
                     | NUM B {
@@ -495,8 +488,8 @@ Exp:			LPAREN Exp RPAREN {
                         }
                         $$ =  Exp("BYTE");
 
-                        string location = Framework::getInstance().freshVar();
-                        codeManager.emitStore($1.name, location);
+                        string location = Framework::getInstance().freshTemp();
+                        codeManager.emitTransfer($1.name, location);
                         $$.place = location;
                     }
                     | STRING {
@@ -585,10 +578,8 @@ Exp:			LPAREN Exp RPAREN {
                         if ($2.name == "<=") operation = "sle";
 
                         //load operands
-                        string operand1 = Framework::getInstance().freshTemp();
-                        string operand2 = Framework::getInstance().freshTemp();
-                        codeManager.emitLoad($1.place, operand1);
-                        codeManager.emitLoad($3.place, operand2);
+                        string operand1 = $1.place;
+                        string operand2 = $3.place;
 
                         //test for relation
                         string boolRelation = Framework::getInstance().freshTemp();
@@ -609,10 +600,8 @@ Exp:			LPAREN Exp RPAREN {
                         }
 
                         // load operands
-                        string operand1 = Framework::getInstance().freshTemp();
-                        string operand2 = Framework::getInstance().freshTemp();
-                        codeManager.emitLoad($1.place, operand1);
-                        codeManager.emit(operand2 + " = load [256 x i1], [256 x i1]* " + $3.place); //load set
+                        string operand1 = $1.place;
+                        string operand2 = $3.place;
 
                         // TODO: check within range
 
@@ -639,10 +628,8 @@ Exp:			LPAREN Exp RPAREN {
 
                         //load operands
                         string operation = ($2.name == "==")? "eq" : "ne";
-                        string operand1 = Framework::getInstance().freshTemp();
-                        string operand2 = Framework::getInstance().freshTemp();
-                        codeManager.emitLoad($1.place, operand1);
-                        codeManager.emitLoad($3.place, operand2);
+                        string operand1 = $1.place;
+                        string operand2 = $3.place;
 
                         //test for (in)equality
                         string boolEquality = Framework::getInstance().freshTemp();
@@ -687,10 +674,10 @@ int main(){
                 "[4 x i8]* @.int_specifier, i32 0, i32 0), i32 %0) ret void}"
         );
         //function print definition:
-        codeManager.emitGlobal("@.str_specifier = internal constant [4 x i8] c\"%s\\0A\\00\"");
+        codeManager.emitGlobal("@.str_specifier = internal constant [3 x i8] c\"%s\\00\"");
         codeManager.emitGlobal(
-                string("define void @print(i8*) {call i32 (i8*, ...) @printf(i8* getelementptr ([4 x i8], ") +
-                "[4 x i8]* @.str_specifier, i32 0, i32 0), i8* %0) ret void}"
+                string("define void @print(i8*) {call i32 (i8*, ...) @printf(i8* getelementptr ([3 x i8], ") +
+                "[3 x i8]* @.str_specifier, i32 0, i32 0), i8* %0) ret void}"
         );
 
         yyparse();

@@ -116,6 +116,10 @@ void CodeBuffer::emitFuncClose() {
 	emit("}");
 }
 
+void CodeBuffer::emitTransfer(const string &src, const string &dest) {
+	emitBinop(src, "0", dest, "add");
+}
+
 // ******** Helper Methods ********** //
 bool replace(string& str, const string& from, const string& to, const BranchLabelIndex index) {
 	size_t pos;
