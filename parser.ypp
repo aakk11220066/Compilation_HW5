@@ -537,14 +537,17 @@ Exp:			LPAREN Exp RPAREN {
                     }
                     Exp {
                         if($1.type != "BOOL" || $3.type != "BOOL"){
-                             output::errorMismatch(yylineno);
-                             myExit();
-                       }
-                       else{
-                           $$ =  Exp("BOOL");
-                       }
+                            output::errorMismatch(yylineno);
+                            myExit();
+                        }
+                        else{
+                            $$ =  Exp("BOOL");
+                        }
 
-
+                        string& eval2ndExpLabel = $3.name;
+                        $$.falseList = codeManager.merge($1.falseList, $4.falseList);
+                        $$.trueList = $4.trueList;
+                        codeManager.bpatch($1.trueList, eval2ndExpLabel);
                     }
                     | Exp
                     OR {
@@ -552,19 +555,19 @@ Exp:			LPAREN Exp RPAREN {
                         codeManager.emitLabel(eval2ndExpLabel);
                         $3.name = eval2ndExpLabel;
                     }
-                    Exp{ //TODO: emit code for calculating, short-circuit after OR token (request backpatching)
+                    Exp{
                         if($1.type != "BOOL" || $4.type != "BOOL"){
                              output::errorMismatch(yylineno);
                              myExit();
-                       }
-                       else{
+                        }
+                        else{
                            $$ =  Exp("BOOL");
-                       }
+                        }
 
-                       string& eval2ndExpLabel = $3.name;
-                       $$.trueList = codeManager.merge($1.trueList, $4.trueList);
-                       $$.falseList = $4.falseList;
-                       codeManager.bpatch($1.falseList, eval2ndExpLabel);
+                        string& eval2ndExpLabel = $3.name;
+                        $$.trueList = codeManager.merge($1.trueList, $4.trueList);
+                        $$.falseList = $4.falseList;
+                        codeManager.bpatch($1.falseList, eval2ndExpLabel);
                     }
                     | Exp RELOP_RELATIONAL Exp {
                         if(($1.type != "INT" && $1.type != "BYTE") || ($3.type != "INT" && $3.type != "BYTE")){
