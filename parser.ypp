@@ -181,7 +181,6 @@
             ++arg_list_it;
             ++place_list_it;
         }
-
         return result;
     }
 %}
