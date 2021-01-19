@@ -163,12 +163,25 @@
         return true;
     }
 
-    string placesListToString(const list<string> places_list){
+    string placesListToString(const list<string> places_list, const list<string> args_list){
         string result = "";
-        for (const string& param : places_list){
-            result += "i32* ";
-            result += param + " ";
+        std::list<string>::iterator arg_list_it = args_list.begin();
+        std::list<string>::iterator place_list_it = places_list.begin() ;
+        while(arg_list_it!= args_list.end()){
+            if(*arg_list_it == "STRING"){
+                result += "i8* ";
+            }
+            else if(*arg_list_it == "SET"){
+                result += "[256 * i1] ";
+            }
+            else{
+                result += "[i32] ";
+            }
+            result += *place_list_it + " ";
+            ++arg_list_it;
+            ++place_list_it;
         }
+
         return result;
     }
 %}
@@ -341,7 +354,7 @@ Call:			ID
                             }
                             $$ = Call ($1.name, type);
 
-                            string argument_list = placesListToString($3.places_list);
+                            string argument_list = placesListToString($3.places_list, $3.arrguments_list);
                             string operand = Framework::getInstance().freshTemp();
                             string return_type;
                             if (type == "VOID"){
