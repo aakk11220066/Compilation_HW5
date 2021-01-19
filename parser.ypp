@@ -163,11 +163,11 @@
         return true;
     }
 
-    string placesListToString(const list<string> places_list, const list<string> args_list){
+    string placesListToString(const list<string>& places_list, const list<string>& args_list){
         string result = "";
-        std::list<string>::iterator arg_list_it = args_list.begin();
-        std::list<string>::iterator place_list_it = places_list.begin() ;
-        while(arg_list_it!= args_list.end()){
+        std::list<std::string>::const_iterator arg_list_it = args_list.cbegin();
+        std::list<std::string>::const_iterator place_list_it = places_list.cbegin() ;
+        while(arg_list_it != args_list.cend()){
             if(*arg_list_it == "STRING"){
                 result += "i8* ";
             }
@@ -533,7 +533,7 @@ Exp:			LPAREN Exp RPAREN {
                     AND {
                         string& eval2ndExpLabel = Framework::getInstance().freshLabel("eval2ndExp");
                         codeManager.emitLabel(eval2ndExpLabel);
-                        $3.name = eval2ndExpLabel;
+                       // $3.name = eval2ndExpLabel;
                     }
                     Exp {
                         if($1.type != "BOOL" || $3.type != "BOOL"){
@@ -553,7 +553,7 @@ Exp:			LPAREN Exp RPAREN {
                     OR {
                         string& eval2ndExpLabel = Framework::getInstance().freshLabel("eval2ndExp");
                         codeManager.emitLabel(eval2ndExpLabel);
-                        $3.name = eval2ndExpLabel;
+                       // $3.name = eval2ndExpLabel;
                     }
                     Exp{
                         if($1.type != "BOOL" || $4.type != "BOOL"){
