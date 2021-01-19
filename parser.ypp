@@ -463,19 +463,19 @@ Exp:			LPAREN Exp RPAREN {
 
                     }
                     | ID {
-                            try{
-                                $$ =  Exp(Framework::getInstance()[$1.name].type);
-                                if (Framework::getInstance().isFunction($1.name)){
-                                    output::errorUndef(yylineno, $1.name);
-                                    myExit();
-                                }
-                            }
-                            catch(Exceptions::IdentifierDoesNotExistException &e){
+                        try{
+                            $$ =  Exp(Framework::getInstance()[$1.name].type);
+                            if (Framework::getInstance().isFunction($1.name)){
                                 output::errorUndef(yylineno, $1.name);
                                 myExit();
                             }
+                        }
+                        catch(Exceptions::IdentifierDoesNotExistException &e){
+                            output::errorUndef(yylineno, $1.name);
+                            myExit();
+                        }
 
-                            $$.place = dynamic_cast<Variable&>(Framework::getInstance()[$1.name]).LLVM_register;
+                        $$.place = dynamic_cast<Variable&>(Framework::getInstance()[$1.name]).LLVM_register;
                     }
                     | Call {
                         $$ =  Exp($1.type);
