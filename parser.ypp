@@ -172,10 +172,10 @@
                 result += "i8* ";
             }
             else if(*arg_list_it == "SET"){
-                result += "[256 * i1] ";
+                result += "[256 x i1] ";
             }
             else{
-                result += "[i32] ";
+                result += "i32 ";
             }
             result += *place_list_it + " ";
             ++arg_list_it;
@@ -530,9 +530,9 @@ Exp:			LPAREN Exp RPAREN {
                     }
                     | Exp
                     AND {
-                        string& eval2ndExpLabel = Framework::getInstance().freshLabel("eval2ndExp");
+                        string eval2ndExpLabel = Framework::getInstance().freshLabel("eval2ndExp");
                         codeManager.emitLabel(eval2ndExpLabel);
-                       // $3.name = eval2ndExpLabel;
+                        $2.name = eval2ndExpLabel;
                     }
                     Exp {
                         if($1.type != "BOOL" || $3.type != "BOOL"){
@@ -543,16 +543,16 @@ Exp:			LPAREN Exp RPAREN {
                             $$ =  Exp("BOOL");
                         }
 
-                        string& eval2ndExpLabel = $3.name;
+                        string& eval2ndExpLabel = $2.name;
                         $$.falseList = codeManager.merge($1.falseList, $4.falseList);
                         $$.trueList = $4.trueList;
                         codeManager.bpatch($1.trueList, eval2ndExpLabel);
                     }
                     | Exp
                     OR {
-                        string& eval2ndExpLabel = Framework::getInstance().freshLabel("eval2ndExp");
+                        string eval2ndExpLabel = Framework::getInstance().freshLabel("eval2ndExp");
                         codeManager.emitLabel(eval2ndExpLabel);
-                       // $3.name = eval2ndExpLabel;
+                        $2.name = eval2ndExpLabel;
                     }
                     Exp{
                         if($1.type != "BOOL" || $4.type != "BOOL"){
@@ -563,7 +563,7 @@ Exp:			LPAREN Exp RPAREN {
                            $$ =  Exp("BOOL");
                         }
 
-                        string& eval2ndExpLabel = $3.name;
+                        string& eval2ndExpLabel = $2.name;
                         $$.trueList = codeManager.merge($1.trueList, $4.trueList);
                         $$.falseList = $4.falseList;
                         codeManager.bpatch($1.falseList, eval2ndExpLabel);
@@ -612,7 +612,7 @@ Exp:			LPAREN Exp RPAREN {
                         string operand1 = Framework::getInstance().freshTemp();
                         string operand2 = Framework::getInstance().freshTemp();
                         codeManager.emitLoad($1.place, operand1);
-                        emit(operand2 + " = load [256 x i1], [256 x i1]* " + $3.place); //load set
+                        codeManager.emit(operand2 + " = load [256 x i1], [256 x i1]* " + $3.place); //load set
 
                         // TODO: check within range
 
@@ -621,10 +621,10 @@ Exp:			LPAREN Exp RPAREN {
                         codeManager.emit(locationPtr + " = getelementptr [256 x i1], [256 x i1]* " + operand2 +
                             ", i32 " + operand1 + ", i1 0");
                         string boolInclusion = Framework::getInstance().freshTemp(); //TODO: remove boolean register boolInclusion
-                        emit(boolInclusion + " = load i1, i1* " + locationPtr); //load i1
+                        codeManager.emit(boolInclusion + " = load i1, i1* " + locationPtr); //load i1
 
                         //jump accordingly
-                        pair<bpatch_address, bpatch_address> bpatchRequests = codeManager.emitIf(boolEquality, "@", "@");
+                        pair<bpatch_address, bpatch_address> bpatchRequests = codeManager.emitIf(boolInclusion, "@", "@");
                         $$.trueList.push_back(bpatchRequests.first);
                         $$.falseList.push_back(bpatchRequests.second);
                     }
