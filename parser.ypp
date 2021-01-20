@@ -411,7 +411,9 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                         codeManager.emitJmp(loopLabel);
                         // request backpatch of nextList into Statement's falseList for the sake of Break statements
                         $$.nextList = codeManager.merge($4.falseList, $7.falseList);
-                        $$.trueList = $7.trueList;
+                        // backpatch Statement's trueList directing it to the beginning of the loop
+                        //  for the sake of Continue statements
+                        codeManager.bpatch($7.trueList, loopLabel);
                         codeManager.bpatch($4.trueList, enterLoopCodeLabel);
                     }
                     | BREAK SC{
@@ -428,7 +430,7 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                             myExit();
                         }
 
-                        $$.nextList = codeManager.makelist(codeManager.emitBpatchJmp());
+                        $$.trueList = codeManager.makelist(codeManager.emitBpatchJmp());
                     }
 Call:			ID
                 LPAREN
