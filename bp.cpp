@@ -136,7 +136,7 @@ void CodeBuffer::emitEndLine() {
 void CodeBuffer::emitPhi(const string &label1, const string &label1_retVal,
 						 const string &label2, const string &label2_retVal,
 						 const string &dest) {
-	emit(dest + " = phi [%" + label1 + ", " + label1_retVal + "], [%" + label2 + ", " + label2_retVal + "]");
+	emit(dest + " = phi i32 [" + label1_retVal + ", %" + label1 + "], [" + label2_retVal + ", %" + label2 + "]");
 }
 
 void CodeBuffer::emitZext(const string &sizeSrc, const string &src, const string &dest) {
