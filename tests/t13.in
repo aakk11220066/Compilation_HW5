@@ -1,0 +1,10 @@
+int kiv(int abc){
+	return abc;
+}
+void main(){
+	while (1 + 2 < 4){
+		continue;
+		printi(kiv(69));		
+	}
+	return;
+}

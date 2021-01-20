@@ -1,0 +1,11 @@
+int kiv(int abc){
+	return abc;
+}
+void main(){
+	if (1 + 2 < 4){
+		printi(kiv(69));
+	} else {
+		print("else clause entered.");
+	}
+	return;
+}

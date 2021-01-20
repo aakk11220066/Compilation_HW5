@@ -1,0 +1,15 @@
+declare void @exit(i32)
+declare i32 @printf(i8*, ...)
+@.int_specifier = internal constant [4 x i8] c"%d\0A\00"
+define void @printi(i32) {call i32 (i8*, ...) @printf(i8* getelementptr ([4 x i8], [4 x i8]* @.int_specifier, i32 0, i32 0), i32 %0) ret void}
+@.str_specifier = internal constant [4 x i8] c"%s\0A\00"
+define void @print(i8*) {call i32 (i8*, ...) @printf(i8* getelementptr ([4 x i8], [4 x i8]* @.str_specifier, i32 0, i32 0), i8* %0) ret void}
+define void @main(){
+entry:
+%t0 = add i32 7, 0
+%t1 = add i32 8, 0
+%t2 = mul i32 %t0, %t1
+%t3 = add i32 2, 0
+%t4 = mul i32 %t2, %t3
+ret void
+}

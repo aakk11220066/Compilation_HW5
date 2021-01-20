@@ -1,0 +1,9 @@
+int kiv(int xyz, int abc){
+	return abc;
+}
+void main(){
+	if (1 + 2 < 3){
+		printi(kiv(78, 69));
+	}
+	return;
+}
