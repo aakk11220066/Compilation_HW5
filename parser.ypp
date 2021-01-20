@@ -379,7 +379,7 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                         const string& last_function_type = Framework::getInstance().getLastAddedFunction().type;
                         assignTypeCheck(last_function_type, $2.type);
                         $$ = Statement($2.type);
-                        codeManager.emit("ret i32 " + $2.place);
+                        codeManager.emit("ret " + fancTypeToLlvmType($2.type) + " " + $2.place);
 
                     } // TODO: should this always be i32?
 
