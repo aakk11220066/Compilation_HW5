@@ -276,6 +276,8 @@ Statements:		Statement {
                     $$ = Statements($1.type);
 
                     $$.nextList = $1.nextList;
+                    $$.falseList = $1.falseList;
+                    $$.trueList = $1.trueList;
                 }
                     | Statements {
                         string nextLabel = Framework::getInstance().freshLabel("statementsNext");
@@ -287,6 +289,8 @@ Statements:		Statement {
                         string& nextLabel = $2.label;
                         codeManager.bpatch($1.nextList, nextLabel);
                         $$.nextList = $3.nextList;
+                        $$.falseList = codeManager.merge($3.falseList, $1.falseList);
+                        $$.trueList = codeManager.merge($3.trueList, $1.trueList);
                     } ; // DONE: backpatch
 Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                 Statements {Framework::getInstance().popScope();}
@@ -295,9 +299,11 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                 }
                     | Type ID SC { Framework::getInstance().insertVariableIntoTopScope(Variable($2.name,$1.type));}
                     | Type ID ASSIGN Exp SC {
-                            Framework::getInstance().insertVariableIntoTopScope(Variable($2.name,$1.type));
-                            assignTypeCheck($1.type,$4.type);
-                    } //TODO: update Variable.LLVM_register, call freshVar, transfer data into register, check if boolean and if so use phi
+                        Framework::getInstance().insertVariableIntoTopScope(Variable($2.name,$1.type));
+                        assignTypeCheck($1.type,$4.type);
+
+                        Framework::getInstance()[$2.name].LLVM_register = $4.place;
+                    } //TODO: update Variable.LLVM_register, call freshTemp, transfer data into register, check if boolean and if so use phi
                     | ID ASSIGN Exp SC {
                         string accepting_type = Framework::getInstance()[$1.name].type;
                         assignTypeCheck(accepting_type, $3.type);
@@ -305,7 +311,7 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                             output::errorUndef(yylineno, $1.name);
                             myExit();
                         }
-                    } //TODO: update Variable.LLVM_register, call freshVar, transfer data into register, check if boolean and if so use phi
+                    } //TODO: update Variable.LLVM_register, call freshTemp, transfer data into register, check if boolean and if so use phi
 
                     | Call SC {}
                     | RETURN SC {
@@ -338,6 +344,8 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
 
                         string& enterIfCodeLabel = $5.label;
                         $$.nextList = codeManager.merge($3.falseList, $6.nextList);
+                        $$.falseList = $6.falseList;
+                        $$.trueList = $6.trueList;
                         codeManager.bpatch($3.trueList, enterIfCodeLabel);
                     }
                     | IF
@@ -367,6 +375,9 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                         $$.nextList = codeManager.merge(codeManager.merge($6.nextList, $10.nextList), $9.nextList);
                         codeManager.bpatch($3.trueList, enterIfCodeLabel);
                         codeManager.bpatch($3.falseList, enterElseCodeLabel);
+
+                        $$.trueList = codeManager.merge($6.trueList, $10.trueList);
+                        $$.falseList = codeManager.merge($6.falseList, $10.falseList);
                     } // DONE: generate jump code, request backpatching
                     | WHILE LPAREN {
                         string loopLabel = Framework::getInstance().freshLabel("loop");
@@ -396,7 +407,9 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                         string& enterLoopCodeLabel = $6.label;
                         codeManager.bpatch($7.nextList, loopLabel);
                         codeManager.emitJmp(loopLabel);
-                        $$.nextList = $4.falseList;
+                        // request backpatch of nextList into Statement's falseList for the sake of Break statements
+                        $$.nextList = codeManager.merge($4.falseList, $7.falseList);
+                        $$.trueList = $7.trueList;
                         codeManager.bpatch($4.trueList, enterLoopCodeLabel);
                     }
                     | BREAK SC{
@@ -404,13 +417,17 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                              output::errorUnexpectedBreak(yylineno);
                              myExit();
                         }
-                    } // TODO: generate jump code, request backpatching
+
+                        $$.falseList = codeManager.makelist(codeManager.emitBpatchJmp());
+                    }
                     | CONTINUE SC{
                         if(!isInWhile){
                             output::errorUnexpectedContinue(yylineno);
                             myExit();
                         }
-                    } // TODO: generate jump code, request backpatching
+
+                        $$.nextList = codeManager.makelist(codeManager.emitBpatchJmp());
+                    }
 Call:			ID
                 LPAREN
                 ExpList
