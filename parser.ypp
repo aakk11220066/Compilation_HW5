@@ -34,13 +34,38 @@
     }
 
     void isSetSize(const string& first_num_string, const string& second_num_string){
-            int first_num = std::stoi(first_num_string);
-            int second_num = std::stoi(second_num_string);
-            if (second_num - first_num > 255 || second_num - first_num <= 0){
-                output::errorSetTooLarge(yylineno, first_num_string, second_num_string);
-                myExit();
-            }
+        int first_num = std::stoi(first_num_string);
+        int second_num = std::stoi(second_num_string);
+        if (second_num - first_num > 255 || second_num - first_num <= 0){
+            output::errorSetTooLarge(yylineno, first_num_string, second_num_string);
+            myExit();
         }
+    }
+
+    void insertBoolIntoRegister(NonTerminal& boolExp){
+        // generate IfTrue, IfFalse labels
+        string& IFTRUE_label = Framework::getInstance().freshLabel("IfTrue");
+        string& IFFALSE_label = Framework::getInstance().freshLabel("IfFalse");
+
+        // backpatch IfTrue, IfFalse labels into boolExp
+        codeManager.bpatch(boolExp.falseList, IFFALSE_label);
+        codeManager.bpatch(boolExp.trueList, IFTRUE_label);
+
+        // generate jump code from IfTrue, IfFalse labels to a third label AssignLabel
+        string& assign_label = Framework::getInstance().freshLabel("assignBool");
+        codeManager.emitLabel(IFTRUE_label);
+        codeManager.emitJmp(assign_label);
+        codeManager.emitLabel(IFFALSE_label);
+        codeManager.emitJmp(assign_label);
+        codeManager.emitLabel(assign_label);
+
+        // generate freshTemp, assign to it with phi based on which label it returned from (IfTrue/IfFalse)
+        string& boolResult = Framework::getInstance().freshTemp();
+        codeManager.emitPhi(IFTRUE_label, "i1 1", IFFALSE_label, "i1 0", boolResult);
+
+        // update boolExp.place to contain newly generated register
+        boolExp.place = boolResult;
+    }
 
 
 
@@ -304,8 +329,19 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                         Framework::getInstance().insertVariableIntoTopScope(Variable($2.name,$1.type));
                         assignTypeCheck($1.type,$4.type);
 
+                        if ($4.type == "BOOL") insertBoolIntoRegister($4);
+                        if ($4.type == "BOOL") {
+                            string& ext = Framework::getInstance().freshTemp();
+                            emitZext("i1", $4.place, ext);
+                            $4.place = ext;
+                        }
+                        if ($4.type == "BYTE") {
+                            string& ext = Framework::getInstance().freshTemp();
+                            emitZext("i8", $4.place, ext);
+                            $4.place = ext;
+                        }
                         dynamic_cast<Variable&>(Framework::getInstance()[$2.name]).LLVM_register = $4.place;
-                    } //TODO: update Variable.LLVM_register, call freshTemp, transfer data into register, check if boolean and if so use phi
+                    }
                     | ID ASSIGN Exp SC {
                         string accepting_type = Framework::getInstance()[$1.name].type;
                         assignTypeCheck(accepting_type, $3.type);
@@ -313,7 +349,20 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                             output::errorUndef(yylineno, $1.name);
                             myExit();
                         }
-                    } //TODO: update Variable.LLVM_register, call freshTemp, transfer data into register, check if boolean and if so use phi
+
+                        if ($3.type == "BOOL") insertBoolIntoRegister($3);
+                        if ($4.type == "BOOL") {
+                            string& ext = Framework::getInstance().freshTemp();
+                            emitZext("i1", $4.place, ext);
+                            $4.place = ext;
+                        }
+                        if ($4.type == "BYTE") {
+                            string& ext = Framework::getInstance().freshTemp();
+                            emitZext("i8", $4.place, ext);
+                            $4.place = ext;
+                        }
+                        dynamic_cast<Variable&>(Framework::getInstance()[$1.name]).LLVM_register = $3.place;
+                    }
 
                     | Call SC {}
                     | RETURN SC {
@@ -467,7 +516,7 @@ Call:			ID
                             output::errorUndefFunc(yylineno, $1.name);
                             myExit();
                         }
-                    } // TODO: generate jump code, request backpatching
+                    }
                     | ID LPAREN RPAREN {
 
                         try{
@@ -482,17 +531,17 @@ Call:			ID
                             output::errorUndefFunc(yylineno, $1.name);
                             myExit();
                         }
-                    }; // TODO: generate jump code, request backpatching
+                    };
 ExpList:		Exp {   $$ = ExpList();
                         $$.arrguments_list.push_front($1.type);
                         $$.places_list.push_front($1.place);
-                     } //TODO: call freshVar
+                     }
                     | Exp COMMA ExpList {
                         $$ = $3;
                         $$.arrguments_list.push_front($1.type);
                         $$.places_list.push_front($1.place);
 
-                    } //TODO: call freshVar
+                    }
 Type:			INT {$$ = Type("INT");}
                     | BYTE{$$ =  Type("BYTE");}
                     | BOOL {$$ =  Type("BOOL");}
@@ -501,7 +550,6 @@ Type:			INT {$$ = Type("INT");}
                         $$ = Type("SET");
                     };
 
-// TODO: All Exps need freshVar (into Exp.place)
 Exp:			LPAREN Exp RPAREN {
                     $$ =  Exp($2.type);
 
@@ -523,7 +571,7 @@ Exp:			LPAREN Exp RPAREN {
                         $$ = Exp(res_type);
 
                         // load operands
-                        string operation = ($2.name == "*")? "mul" : ($2.name == "/")? "sdiv" : "udiv";
+                        string operation = ($2.name == "*")? "mul" : ($2.name == "/")? "sdiv" : "srem"; //srem = % (modulo)
                         string operand1 = $1.place;
                         string operand2 = $3.place;
 

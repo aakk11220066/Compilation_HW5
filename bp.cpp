@@ -133,6 +133,16 @@ void CodeBuffer::emitEndLine() {
     emit("");
 }
 
+void CodeBuffer::emitPhi(const string &label1, const string &label1_retVal,
+						 const string &label2, const string &label2_retVal,
+						 const string &dest) {
+	emit(dest + " = phi [%" + label1 + ", " + label1_retVal + "], [%" + label2 + ", " + label2_retVal + "]");
+}
+
+void CodeBuffer::emitZext(const string &sizeSrc, const string &src, const string &dest) {
+	emit(dest + " = zext " + sizeSrc + " " + src + " to i32");
+}
+
 // ******** Helper Methods ********** //
 bool replace(string& str, const string& from, const string& to, const BranchLabelIndex index) {
 	size_t pos;
