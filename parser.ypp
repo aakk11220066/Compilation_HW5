@@ -296,13 +296,15 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                 Statements {Framework::getInstance().popScope();}
                 RBRACE {
                     $$.nextList = $3.nextList;
+                    $$.falseList = $3.falseList;
+                    $$.trueList = $3.trueList;
                 }
                     | Type ID SC { Framework::getInstance().insertVariableIntoTopScope(Variable($2.name,$1.type));}
                     | Type ID ASSIGN Exp SC {
                         Framework::getInstance().insertVariableIntoTopScope(Variable($2.name,$1.type));
                         assignTypeCheck($1.type,$4.type);
 
-                        Framework::getInstance()[$2.name].LLVM_register = $4.place;
+                        dynamic_cast<Variable&>(Framework::getInstance()[$2.name]).LLVM_register = $4.place;
                     } //TODO: update Variable.LLVM_register, call freshTemp, transfer data into register, check if boolean and if so use phi
                     | ID ASSIGN Exp SC {
                         string accepting_type = Framework::getInstance()[$1.name].type;
