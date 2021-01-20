@@ -8,8 +8,8 @@ extern CodeBuffer& codeManager;
 //NOTE: must modify default offset of Variable to correct offset!
 Variable& Scope::insert(const Variable &newVar) {
     Variable addedVar = Variable("BAD", "BAD");
-    if (newVar.offset < 0) addedVar = Variable(newVar.name, newVar.type, newVar.offset);
-    else addedVar = Variable(newVar.name, newVar.type, newVar.offset + (nextOffset++));
+    if (newVar.offset < 0) addedVar = Variable(newVar.name, newVar.type, newVar.offset, newVar.LLVM_register);
+    else addedVar = Variable(newVar.name, newVar.type, newVar.offset + (nextOffset++), newVar.LLVM_register);
     variables.push_back(addedVar);
     return variables.back();
 }

@@ -2,6 +2,7 @@
 	#include <iostream>
 	#include <string>
 	#include <list>
+	#include <cassert>
 	using namespace std;
 	#include "Framework.h"
 	#include "Symbol.h"
@@ -163,25 +164,32 @@
         return true;
     }
 
+    string fancTypeToLlvmType(const string& fancType){
+        if (fancType == "STRING"){
+            return "i8* ";
+        }
+        else if (fancType == "SET"){
+            return "[256 x i1] ";
+        }
+        else if (fancType == "VOID"){
+            return "void ";
+        }
+        else{
+            return "i32 ";
+        }
+    }
     string placesListToString(const list<string>& places_list, const list<string>& args_list){
         string result = "";
         std::list<std::string>::const_iterator arg_list_it = args_list.cbegin();
         std::list<std::string>::const_iterator place_list_it = places_list.cbegin() ;
         while(arg_list_it != args_list.cend()){
-            if(*arg_list_it == "STRING"){
-                result += "i8* ";
-            }
-            else if(*arg_list_it == "SET"){
-                result += "[256 x i1] ";
-            }
-            else{
-                result += "i32 ";
-            }
+            result += ", ";
+            result += fancTypeToLlvmType(*arg_list_it);
             result += *place_list_it + " ";
             ++arg_list_it;
             ++place_list_it;
         }
-        return result;
+        return result.substr(2);
     }
 %}
 
@@ -205,9 +213,13 @@
 
 %%
 
-Program:		Funcs {};
+Program:		Funcs {
+                    assert($1.nextList.empty());
+                };
 Funcs:			/*epsilon*/ {}
-                    |FuncDecl Funcs {}; //TODO: backpatch
+                    |FuncDecl Funcs {
+                        assert ($1.nextList.empty() && $2.nextList.empty());
+                    };
 FuncDecl:		RetType
                 ID {
                     Framework::getInstance().addScope(Scope::FUNCTION);
@@ -220,17 +232,19 @@ FuncDecl:		RetType
                         Framework::getInstance().addParamToLastFunc(param);
 
                         ++numParamsAddedSoFar;
-                        Variable offsetFixedParam = Variable(param.name, param.type, -numParamsAddedSoFar);
+                        Variable offsetFixedParam = Variable(param.name, param.type,
+                            -numParamsAddedSoFar, "%" + to_string(numParamsAddedSoFar - 1)
+                        );
                         Framework::getInstance().insertVariableIntoTopScope(offsetFixedParam);
                     }
                 }
                 RPAREN
                 LBRACE {
-                    string retType = ($1.type == "VOID")? "void" : "i32";
+                    string retType = fancTypeToLlvmType($1.type);
                     string params = "";
-                    if (!$5.namesAndTypes.empty()) {
+                    if (! $5.namesAndTypes.empty()){
                         for (const Variable& param : $5.namesAndTypes){
-                            params += string(", ") + param.LLVM_register;
+                            params += string(", ") + retType + param.LLVM_register;
                         }
                         params = params.substr(2);
                     }
@@ -240,6 +254,8 @@ FuncDecl:		RetType
                 RBRACE {
                     codeManager.emitFuncClose();
                     Framework::getInstance().popScope();
+
+                    assert($10.nextList.empty());
                 };
 RetType:		Type {$$ = RetType($1.type);}
                     | VOID {$$ = RetType("VOID");};
@@ -256,11 +272,27 @@ FormalsList:	FormalDecl {
                 }
                     | FormalDecl COMMA FormalsList{$$ = $3; $$.namesAndTypes.push_front(Variable($1.name, $1.type));} ;
 FormalDecl:		Type ID {$$ = FormalDecl($2.name, $1.type);} ;
-Statements:		Statement {$$ = Statements($1.type);}
-                    | Statements Statement{} ; // TODO: backpatch
+Statements:		Statement {
+                    $$ = Statements($1.type);
+
+                    $$.nextList = $1.nextList;
+                }
+                    | Statements {
+                        string nextLabel = Framework::getInstance().freshLabel("statementsNext");
+                        codeManager.emitJmp(nextLabel);
+                        codeManager.emitLabel(nextLabel);
+                        $$.label = nextLabel;
+                    }
+                    Statement {
+                        string& nextLabel = $2.label;
+                        codeManager.bpatch($1.nextList, nextLabel);
+                        $$.nextList = $3.nextList;
+                    } ; // DONE: backpatch
 Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                 Statements {Framework::getInstance().popScope();}
-                RBRACE {}
+                RBRACE {
+                    $$.nextList = $3.nextList;
+                }
                     | Type ID SC { Framework::getInstance().insertVariableIntoTopScope(Variable($2.name,$1.type));}
                     | Type ID ASSIGN Exp SC {
                             Framework::getInstance().insertVariableIntoTopScope(Variable($2.name,$1.type));
@@ -276,7 +308,7 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                     } //TODO: update Variable.LLVM_register, call freshVar, transfer data into register, check if boolean and if so use phi
 
                     | Call SC {}
-                    | RETURN SC { // TODO: generate jump code, request backpatching
+                    | RETURN SC {
                         const string& last_function_type = Framework::getInstance().getLastAddedFunction().type;
                         if(last_function_type!="VOID"){
                             output::errorMismatch(yylineno);
@@ -292,7 +324,7 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                         $$ = Statement($2.type);
                         codeManager.emit("ret i32 " + $2.place);
 
-                    } // TODO: generate jump code, request backpatching, transfer data to return zone
+                    } // TODO: should this always be i32?
 
                     | IF
                     LPAREN
@@ -303,26 +335,69 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                             output::errorMismatch(yylineno);
                             myExit();
                         }
-                    } // TODO: generate jump code, request backpatching
+
+                        string& enterIfCodeLabel = $5.label;
+                        $$.nextList = codeManager.merge($3.falseList, $6.nextList);
+                        codeManager.bpatch($3.trueList, enterIfCodeLabel);
+                    }
                     | IF
                     LPAREN
                     Exp
                     RPAREN marker_RPAREN
                     Statement marker_STATEMENT
-                    ELSE {Framework::getInstance().addScope(Scope::IF);}
+                    ELSE {
+                        Framework::getInstance().addScope(Scope::IF);
+
+                        // Exp condition fulfilled, relevant code executed, now jump past else code
+                        $$.nextList = codeManager.makelist(codeManager.emitBpatchJmp());
+
+                        string enterElseCodeLabel = Framework::getInstance().freshLabel("enterElseCode");
+                        codeManager.emitLabel(enterElseCodeLabel);
+                        $$.label = enterElseCodeLabel;
+                    }
                     Statement {
                         Framework::getInstance().popScope();
                         if ($3.type != "BOOL"){
                             output::errorMismatch(yylineno);
                             myExit();
                         }
-                    } // TODO: generate jump code, request backpatching
-                    | WHILE LPAREN Exp RPAREN {Framework::getInstance().addScope(Scope::LOOP); isInWhile = true;} Statement {Framework::getInstance().popScope(); isInWhile = false;} {
-                    if ($3.type != "BOOL"){
-                         output::errorMismatch(yylineno);
-                         myExit();
-                    } // TODO: generate jump code, request backpatching
 
+                        string& enterIfCodeLabel = $5.label;
+                        string& enterElseCodeLabel = $9.label;
+                        $$.nextList = codeManager.merge(codeManager.merge($6.nextList, $10.nextList), $9.nextList);
+                        codeManager.bpatch($3.trueList, enterIfCodeLabel);
+                        codeManager.bpatch($3.falseList, enterElseCodeLabel);
+                    } // DONE: generate jump code, request backpatching
+                    | WHILE LPAREN {
+                        string loopLabel = Framework::getInstance().freshLabel("loop");
+                        codeManager.emitJmp(loopLabel);
+                        codeManager.emitLabel(loopLabel);
+                        $$.label = loopLabel;
+                    }
+                    Exp
+                    RPAREN {
+                        Framework::getInstance().addScope(Scope::LOOP); isInWhile = true;
+
+                        string enterLoopCodeLabel = Framework::getInstance().freshLabel("enterLoopCode");
+                        codeManager.emitJmp(enterLoopCodeLabel);
+                        codeManager.emitLabel(enterLoopCodeLabel);
+                        $$.label = enterLoopCodeLabel;
+                    }
+                    Statement {
+                        Framework::getInstance().popScope();
+                        isInWhile = false;
+                    } {
+                        if ($4.type != "BOOL"){
+                             output::errorMismatch(yylineno);
+                             myExit();
+                        } // DONE: generate jump code, request backpatching
+
+                        string& loopLabel = $3.label;
+                        string& enterLoopCodeLabel = $6.label;
+                        codeManager.bpatch($7.nextList, loopLabel);
+                        codeManager.emitJmp(loopLabel);
+                        $$.nextList = $4.falseList;
+                        codeManager.bpatch($4.trueList, enterLoopCodeLabel);
                     }
                     | BREAK SC{
                         if(!isInWhile){
@@ -502,12 +577,12 @@ Exp:			LPAREN Exp RPAREN {
                     | TRUE {
                         $$ =  Exp("BOOL");
 
-                        $$.trueList = codeManager.makelist(codeManager.emitJmp("@"));
+                        $$.trueList = codeManager.makelist(codeManager.emitBpatchJmp());
                     }
                     | FALSE {
                         $$ =  Exp("BOOL");
 
-                        $$.falseList = codeManager.makelist(codeManager.emitJmp("@"));
+                        $$.falseList = codeManager.makelist(codeManager.emitBpatchJmp());
                     }
                     | NOT Exp {
                         if($2.type != "BOOL"){
@@ -525,7 +600,7 @@ Exp:			LPAREN Exp RPAREN {
                     AND {
                         string eval2ndExpLabel = Framework::getInstance().freshLabel("eval2ndExp");
                         codeManager.emitLabel(eval2ndExpLabel);
-                        $2.name = eval2ndExpLabel;
+                        $$.label = eval2ndExpLabel;
                     }
                     Exp {
                         if($1.type != "BOOL" || $3.type != "BOOL"){
@@ -536,7 +611,7 @@ Exp:			LPAREN Exp RPAREN {
                             $$ =  Exp("BOOL");
                         }
 
-                        string& eval2ndExpLabel = $2.name;
+                        string& eval2ndExpLabel = $3.label;
                         $$.falseList = codeManager.merge($1.falseList, $4.falseList);
                         $$.trueList = $4.trueList;
                         codeManager.bpatch($1.trueList, eval2ndExpLabel);
@@ -586,7 +661,7 @@ Exp:			LPAREN Exp RPAREN {
                         codeManager.emitCond(operation, operand1, operand2, boolRelation);
 
                         //jump accordingly
-                        pair<bpatch_address, bpatch_address> bpatchRequests = codeManager.emitIf(boolRelation, "@", "@");
+                        pair<bpatch_address, bpatch_address> bpatchRequests = codeManager.emitBpatchIf(boolRelation);
                         $$.trueList = codeManager.makelist(bpatchRequests.first);
                         $$.falseList = codeManager.makelist(bpatchRequests.second);
                     }
@@ -613,7 +688,7 @@ Exp:			LPAREN Exp RPAREN {
                         codeManager.emit(boolInclusion + " = load i1, i1* " + locationPtr); //load i1
 
                         //jump accordingly
-                        pair<bpatch_address, bpatch_address> bpatchRequests = codeManager.emitIf(boolInclusion, "@", "@");
+                        pair<bpatch_address, bpatch_address> bpatchRequests = codeManager.emitBpatchIf(boolInclusion);
                         $$.trueList.push_back(bpatchRequests.first);
                         $$.falseList.push_back(bpatchRequests.second);
                     }
@@ -636,7 +711,7 @@ Exp:			LPAREN Exp RPAREN {
                         codeManager.emitCond(operation, operand1, operand2, boolEquality);
 
                         //jump accordingly
-                        pair<bpatch_address, bpatch_address> bpatchRequests = codeManager.emitIf(boolEquality, "@", "@");
+                        pair<bpatch_address, bpatch_address> bpatchRequests = codeManager.emitBpatchIf(boolEquality);
                         $$.trueList.push_back(bpatchRequests.first);
                         $$.falseList.push_back(bpatchRequests.second);
                     }
@@ -651,7 +726,13 @@ Exp:			LPAREN Exp RPAREN {
 
                         $$.place = $4.place;
                     };
-marker_RPAREN:      /*epsilon*/ {Framework::getInstance().addScope(Scope::IF);}
+marker_RPAREN:      /*epsilon*/ {
+    Framework::getInstance().addScope(Scope::IF);
+
+    string enterIfCodeLabel = Framework::getInstance().freshLabel("enterIfCode");
+    codeManager.emitLabel(enterIfCodeLabel);
+    $$.label = enterIfCodeLabel;
+}
 marker_STATEMENT:   /*epsilon*/ {Framework::getInstance().popScope();}
 
 %%
@@ -666,6 +747,7 @@ int main(){
         // declare externs
         codeManager.emitGlobal( "declare void @exit(i32)" );
         codeManager.emitGlobal( "declare i32 @printf(i8*, ...)" );
+        codeManager.emitGlobal(""); // empty line
 
         // function printi definition:
         codeManager.emitGlobal("@.int_specifier = internal constant [4 x i8] c\"%d\\0A\\00\"");
@@ -673,12 +755,14 @@ int main(){
                 string("define void @printi(i32) {call i32 (i8*, ...) @printf(i8* getelementptr ([4 x i8], ") +
                 "[4 x i8]* @.int_specifier, i32 0, i32 0), i32 %0) ret void}"
         );
+        codeManager.emitGlobal(""); // empty line
         //function print definition:
         codeManager.emitGlobal("@.str_specifier = internal constant [3 x i8] c\"%s\\00\"");
         codeManager.emitGlobal(
                 string("define void @print(i8*) {call i32 (i8*, ...) @printf(i8* getelementptr ([3 x i8], ") +
                 "[3 x i8]* @.str_specifier, i32 0, i32 0), i8* %0) ret void}"
         );
+        codeManager.emitGlobal(""); // empty line
 
         yyparse();
     }

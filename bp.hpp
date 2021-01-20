@@ -69,10 +69,13 @@ public:
 	void emitBinop(const string& src1, const string& src2, const string& dest, const string& binop);
 	void emitLabel(const string& name);
 	void emitCond(const string &operation, const string &src1, const string &src2, const string &dest);
-	pair<bpatch_address, bpatch_address> emitIf(const string& cond, const string& ifTrueLabel, const string& ifFalseLabel);
-	bpatch_address emitJmp(const string& dest);
+	void emitIf(const string& cond, const string& ifTrueLabel, const string& ifFalseLabel);
+	void emitJmp(const string& dest);
+	pair<bpatch_address, bpatch_address> emitBpatchIf(const string& cond);
+	bpatch_address emitBpatchJmp();
 	void emitFuncOpen(const string& name, const string& retType, const string& params);
 	void emitFuncClose();
+	void emitEndLine();
 };
 
 #endif

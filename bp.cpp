@@ -98,13 +98,21 @@ void CodeBuffer::emitCond(const string &operation, const string &src1, const str
 	emit(dest + " = icmp " + operation + " i32 " + src1 + ", " + src2);
 }
 
-pair<bpatch_address, bpatch_address> CodeBuffer::emitIf(const string &cond, const string &ifTrueLabel, const string &ifFalseLabel) {
-	int bufferAddress = emit("br i1 " + cond + ", label %" + ifTrueLabel + ", label %" + ifFalseLabel);
+void CodeBuffer::emitIf(const string &cond, const string &ifTrueLabel, const string &ifFalseLabel) {
+	emit("br i1 " + cond + ", label %" + ifTrueLabel + ", label %" + ifFalseLabel);
+}
+
+void CodeBuffer::emitJmp(const string &dest) {
+	emit("br label %" + dest);
+}
+
+pair<bpatch_address, bpatch_address> CodeBuffer::emitBpatchIf(const string &cond) {
+	int bufferAddress = emit("br i1 " + cond + ", label @, label @");
 	return {{bufferAddress, FIRST}, {bufferAddress, SECOND}};
 }
 
-bpatch_address CodeBuffer::emitJmp(const string &dest) {
-	return {emit("br label %" + dest), FIRST};
+bpatch_address CodeBuffer::emitBpatchJmp() {
+	return {emit("br label @"), FIRST};
 }
 
 void CodeBuffer::emitFuncOpen(const string &name, const string& retType, const string &params) {
@@ -114,10 +122,15 @@ void CodeBuffer::emitFuncOpen(const string &name, const string& retType, const s
 
 void CodeBuffer::emitFuncClose() {
 	emit("}");
+	emitEndLine();
 }
 
 void CodeBuffer::emitTransfer(const string &src, const string &dest) {
 	emitBinop(src, "0", dest, "add");
+}
+
+void CodeBuffer::emitEndLine() {
+    emit("");
 }
 
 // ******** Helper Methods ********** //

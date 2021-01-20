@@ -15,7 +15,8 @@ Symbol::Symbol(const string &name, const string &type, int offset)
 
 Variable::Variable(const string &name, const string &type) : Symbol(name, type) {}
 
-Variable::Variable(const string &name, const string &type, int offset) : Symbol(name, type, offset) {}
+Variable::Variable(const string &name, const string &type, int offset, const string& LLVM_register) :
+    Symbol(name, type, offset), LLVM_register(LLVM_register) {}
 
 Function::Function(const string &name, const string &type) : Symbol(name, type) {}
 

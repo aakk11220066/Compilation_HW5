@@ -24,6 +24,7 @@ public:
     bpatch_list trueList = bpatch_list();
     bpatch_list falseList = bpatch_list();
     bpatch_list nextList = bpatch_list();
+    string label = "";
 
     NonTerminal() = default;
     NonTerminal(const string& name, const string& type) : name(name), type(type) {}
@@ -37,6 +38,7 @@ public:
         trueList = other.trueList;
         falseList = other.falseList;
         nextList = other.nextList;
+        label = other.label;
         return *this;
     };
 };
