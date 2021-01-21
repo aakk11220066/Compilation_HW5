@@ -12,7 +12,8 @@ using namespace std;
 enum BranchLabelIndex {FIRST, SECOND};
 
 typedef pair<int,BranchLabelIndex> bpatch_address;
-const string SET_def = "{i32, i32, i32, [256 x i1]}";
+const string SETARRAY_def = "[256 x i1]";
+const string SET_def = string("{i32, i32, i32, ") + SETARRAY_def + "}";
 
 class CodeBuffer{
 	CodeBuffer();

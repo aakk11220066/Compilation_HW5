@@ -65,7 +65,7 @@
 
         // update boolExp.place to contain newly generated register
         boolExp.place = boolResult;
-    }
+    } // TODO: Should be called for all opportunities for a boolean to be returned?
 
     pair<bpatch_address, bpatch_address> compare(const string& operand1, const string& operand2, const string& operation){
         //test for relation
@@ -614,12 +614,60 @@ Exp:			LPAREN Exp RPAREN {
                         $$ = Exp(res_type);
 
                         string operation = ($2.name == "+")? "add" : "sub";
-                        string operand1 = $1.place;
-                        string operand2 = $3.place;
-                        string addResult = Framework::getInstance().freshTemp();
-                        codeManager.emitBinop(operand1, operand2, addResult, operation);
-                        $$.place = addResult;
-                    } // TODO: add support for sets
+                        if ($1.type != "SET" && $3.type != "SET"){
+                            string operand1 = $1.place;
+                            string operand2 = $3.place;
+                            string addResult = Framework::getInstance().freshTemp();
+                            codeManager.emitBinop(operand1, operand2, addResult, operation);
+                            $$.place = addResult;
+                        }
+                        else{
+                            string operandNum = ($1.type != "SET")? $1.place : $3.place;
+                            string operandSet = ($1.type == "SET")? $1.place : $3.place;
+
+                            //check within range
+                            checkInRange(operandSet, operandNum, $2.name);
+
+                            //extract setArray from set into register
+                            string setArray = Framework::getInstance().freshTemp();
+                            codeManager.emit(setArray + " = extractvalue " + SET_def + " " + operandSet + ", 3");
+
+                            //store setArray in memory
+                            string arrInMemPtr = Framework::getInstance().freshTemp();
+                            codeManager.emit(arrInMemPtr + " = alloca " + SETARRAY_def);
+                            codeManager.emit("store " + SETARRAY_def + " " + setArray + ", " + SETARRAY_def + "* " + arrInMemPtr);
+
+                            //NEXT 2 BLOCKS: calculate index
+                            //get lower bound of set
+                            string setBegin = Framework::getInstance().freshTemp();
+                            codeManager.emitSetExtractBegin(operandSet, setBegin);
+
+                            //get index of bit that indicates if requested number is in set
+                            string arrayIndex = Framework::getInstance().freshTemp();
+                            codeManager.emitBinop(operandNum, setBegin, arrayIndex, "sub");
+
+                            //get ptr to requested cell
+                            string locationPtr = Framework::getInstance().freshTemp();
+                            codeManager.emit(locationPtr + " = getelementptr " + SETARRAY_def + ", " + SETARRAY_def + "* " + arrInMemPtr +
+                                ", i1 0, i32 " + arrayIndex);
+
+                            //edit memory at cell requested
+                            string newInclusionStatus = ($2.name == "+")? "i1 1" : "i1 0";
+                            codeManager.emit("store " + newInclusionStatus + ", i1* " + locationPtr);
+
+                            //load setArray back from memory into register
+                            string newSetArray = Framework::getInstance().freshTemp();
+                            codeManager.emit(newSetArray + " = load " + SETARRAY_def + ", " + SETARRAY_def + "* " + arrInMemPtr + ", align 4");
+
+                            //insert setArray back from register into set
+                            string newSet = Framework::getInstance().freshTemp();
+                            codeManager.emit(newSet + " = insertvalue " + SET_def + " " + operandSet +
+                                ", " + SETARRAY_def + " " + newSetArray + ", 3");
+
+                            //update operandSet.place
+                            $$.place = newSet;
+                        }
+                    }
                     | Exp BINOP_MULTIPLICATIVE Exp {
                         string res_type = typeBinopMultiplicativeChecking($1.type, $3.type);
                         $$ = Exp(res_type);
@@ -802,17 +850,17 @@ Exp:			LPAREN Exp RPAREN {
                         string setBegin = Framework::getInstance().freshTemp();
                         codeManager.emitSetExtractBegin(operandSet, setBegin);
 
-                        //get index of set that indicates if requested number is in set
+                        //get index of bit that indicates if requested number is in set
                         string arrayIndex = Framework::getInstance().freshTemp();
                         codeManager.emitBinop(operandNum, setBegin, arrayIndex, "sub");
 
                         //push array into memory so that we can extract a bit from it.  locationPtr points to bit
                         string arrInMemPtr = Framework::getInstance().freshTemp();
-                        codeManager.emit(arrInMemPtr + " = alloca [256 x i1]");
-                        codeManager.emit("store [256 x i1] " + setArray + ", [256 x i1]* " + arrInMemPtr);
+                        codeManager.emit(arrInMemPtr + " = alloca " + SETARRAY_def);
+                        codeManager.emit("store " + SETARRAY_def + " " + setArray + ", " + SETARRAY_def + "* " + arrInMemPtr);
                         string locationPtr = Framework::getInstance().freshTemp();
-                        codeManager.emit(locationPtr + " = getelementptr [256 x i1], [256 x i1]* " + arrInMemPtr +
-                            ", i32 " + arrayIndex + ", i1 0");
+                        codeManager.emit(locationPtr + " = getelementptr " + SETARRAY_def + ", " + SETARRAY_def + "* " + arrInMemPtr +
+                            ", i1 0, i32 " + arrayIndex);
 
                         //extract bit from locationPtr
                         string boolInclusion = Framework::getInstance().freshTemp();
