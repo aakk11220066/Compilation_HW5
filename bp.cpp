@@ -120,7 +120,8 @@ void CodeBuffer::emitFuncOpen(const string &name, const string& retType, const s
 	emit("entry:");
 }
 
-void CodeBuffer::emitFuncClose() {
+void CodeBuffer::emitFuncClose(const string& retType) {
+	if (retType == "void") emit("ret void");
 	emit("}");
 	emitEndLine();
 }

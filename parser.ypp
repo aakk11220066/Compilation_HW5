@@ -65,7 +65,7 @@
 
         // update boolExp.place to contain newly generated register
         boolExp.place = boolResult;
-    } // TODO: Should be called for all opportunities for a boolean to be returned?
+    }
 
     pair<bpatch_address, bpatch_address> compare(const string& operand1, const string& operand2, const string& operation){
         //test for relation
@@ -276,6 +276,9 @@
 %nonassoc TRUE FALSE RETURN BREAK CONTINUE DOTS ID NUM STRING SET INT BYTE B BOOL VOID
 
 %%
+// TODO: test integer overflow
+// TODO: fix byte overflow - with unsigned modulo operation in binop
+// TODO: add ret even if return not given
 
 Program:		Funcs {
                     assert($1.nextList.empty());
@@ -316,7 +319,8 @@ FuncDecl:		RetType
                 }
                 Statements
                 RBRACE {
-                    codeManager.emitFuncClose();
+                    string retType = fancTypeToLlvmType($1.type);
+                    codeManager.emitFuncClose(retType`);
                     Framework::getInstance().popScope();
 
                     assert($10.nextList.empty());
@@ -356,7 +360,7 @@ Statements:		Statement {
                         $$.falseList = codeManager.merge($3.falseList, $1.falseList);
                         $$.trueList = codeManager.merge($3.trueList, $1.trueList);
                     } ; // DONE: backpatch
-Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
+Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}  // TODO: load and store variables on stack
                 Statements {Framework::getInstance().popScope();}
                 RBRACE {
                     $$.nextList = $3.nextList;
@@ -664,8 +668,16 @@ Exp:			LPAREN Exp RPAREN {
                             codeManager.emit(newSet + " = insertvalue " + SET_def + " " + operandSet +
                                 ", " + SETARRAY_def + " " + newSetArray + ", 3");
 
+                            //update set size
+                            string oldSetSize = Framework::getInstance().freshTemp();
+                            codeManager.emitSetExtractNumElems(operandSet, oldSetSize);
+                            string newSetSize = Framework::getInstance().freshTemp();
+                            codeManager.emitBinop(oldSetSize, "1", newSetSize, operation);
+                            string sizeUpdatedNewSet = Framework::getInstance().freshTemp();
+                            codeManager.emit(sizeUpdatedNewSet + " = insertvalue " + SET_def + ", i32 " + newSetSize + ", 2");
+
                             //update operandSet.place
-                            $$.place = newSet;
+                            $$.place = sizeUpdatedNewSet;
                         }
                     }
                     | Exp BINOP_MULTIPLICATIVE Exp {

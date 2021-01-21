@@ -77,7 +77,7 @@ public:
 	pair<bpatch_address, bpatch_address> emitBpatchIf(const string& cond);
 	bpatch_address emitBpatchJmp();
 	void emitFuncOpen(const string& name, const string& retType, const string& params);
-	void emitFuncClose();
+	void emitFuncClose(const string& retType);
 	void emitEndLine();
 	void emitPhi(const string& label1, const string& label1_retVal,
 				 const string& label2, const string& label2_retVal,
