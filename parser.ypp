@@ -67,7 +67,46 @@
         boolExp.place = boolResult;
     }
 
+    pair<bpatch_address, bpatch_address> compare(const string& operand1, const string& operand2, const string& operation){
+        //test for relation
+        string boolRelation = Framework::getInstance().freshTemp();
+        codeManager.emitCond(operation, operand1, operand2, boolRelation);
 
+        //jump accordingly
+        pair<bpatch_address, bpatch_address> bpatchRequests = codeManager.emitBpatchIf(boolRelation);
+        return bpatchRequests;
+    }
+
+    void checkInRange(const string& operandSet, const string& operandNum, const string& currentRelop){
+        //  prepare labels
+        string outOfRangeLabel = Framework::getInstance().freshLabel("outOfRangeError");
+        string maybeInRangeLabel = Framework::getInstance().freshLabel("maybeInRange");
+        string inRangeLabel = Framework::getInstance().freshLabel("inRange");
+
+        //  get set range
+        string setBegin = Framework::getInstance().freshTemp();
+        codeManager.emitSetExtractBegin(operandSet, setBegin);
+        string setEnd = Framework::getInstance().freshTemp();
+        codeManager.emitSetExtractEnd(operandSet, setEnd);
+
+        //  check lower bound
+        pair<bpatch_address, bpatch_address> bpatchRequests1 = compare(setBegin, operandNum, "sgt");
+        codeManager.bpatch(codeManager.makelist(bpatchRequests1.first), outOfRangeLabel);
+        codeManager.bpatch(codeManager.makelist(bpatchRequests1.second), maybeInRangeLabel);
+
+        //  check upper bound
+        codeManager.emitLabel(maybeInRangeLabel);
+        pair<bpatch_address, bpatch_address> bpatchRequests2 = compare(setEnd, operandNum, "slt");
+        codeManager.bpatch(codeManager.makelist(bpatchRequests2.first), outOfRangeLabel);
+        codeManager.bpatch(codeManager.makelist(bpatchRequests2.second), inRangeLabel);
+
+        //  throw out of range error
+        codeManager.emitLabel(outOfRangeLabel);
+        codeManager.emitException(Framework::getInstance().freshString("Error out of set range. Op: " + currentRelop));
+
+        //  in range
+        codeManager.emitLabel(inRangeLabel);
+    }
 
 	//NonTerminal classes
     class Program : public NonTerminal{};
@@ -194,8 +233,8 @@
             return "i8* ";
         }
         else if (fancType == "SET"){
-            return "[256 x i1] ";
-        } // FIXME: should be struct
+            return SET_def + " ";
+        }
         else if (fancType == "VOID"){
             return "void ";
         }
@@ -237,8 +276,7 @@
 %nonassoc TRUE FALSE RETURN BREAK CONTINUE DOTS ID NUM STRING SET INT BYTE B BOOL VOID
 
 %%
-
-// TODO: set - assign, binop,
+//TODO: zero-init set
 
 Program:		Funcs {
                     assert($1.nextList.empty());
@@ -326,7 +364,19 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                     $$.falseList = $3.falseList;
                     $$.trueList = $3.trueList;
                 }
-                    | Type ID SC { Framework::getInstance().insertVariableIntoTopScope(Variable($2.name,$1.type));}
+                    | Type ID SC {
+                        Framework::getInstance().insertVariableIntoTopScope(Variable($2.name,$1.type));
+
+                        //initialize new variable
+                        string initReg = Framework::getInstance().freshTemp();
+                        if ($1.type != "SET"){
+                            codeManager.emitTransfer("0", initReg);
+                        }
+                        else{
+                            codeManager.emitNewSet($1.setBegin, $1.setEnd, initReg);
+                        }
+                        dynamic_cast<Variable&>(Framework::getInstance()[$2.name]).LLVM_register = initReg;
+                    }
                     | Type ID ASSIGN Exp SC {
                         Framework::getInstance().insertVariableIntoTopScope(Variable($2.name,$1.type));
                         assignTypeCheck($1.type,$4.type);
@@ -343,7 +393,7 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                             $4.place = ext;
                         }*/
                         dynamic_cast<Variable&>(Framework::getInstance()[$2.name]).LLVM_register = $4.place;
-                    } // TODO: handle sets
+                    }
                     | ID ASSIGN Exp SC {
                         string accepting_type = Framework::getInstance()[$1.name].type;
                         assignTypeCheck(accepting_type, $3.type);
@@ -364,7 +414,7 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                             $4.place = ext;
                         }*/
                         dynamic_cast<Variable&>(Framework::getInstance()[$1.name]).LLVM_register = $3.place;
-                    } // TODO: handle sets
+                    }
 
                     | Call SC {}
                     | RETURN SC {
@@ -507,7 +557,7 @@ Call:			ID
                                 return_type = "void";
                                 codeManager.emit("call " + return_type + " @" + $1.name + "(" + argument_list + ")");
                             }
-                            else{ // TODO: handle set
+                            else{
                                 return_type = fancTypeToLlvmType($1.type);
                                 codeManager.emit(operand + " = call " + return_type + " @" + $1.name + "(" + argument_list + ")");
                                 $$.place = operand;
@@ -526,7 +576,7 @@ Call:			ID
                                if (!Framework::getInstance().isFunction($1.name)) throw Exceptions::IdentifierDoesNotExistException(yylineno, $1.name);
 
                                $$ = Call ($1.name, type);
-                               string return_type = fancTypeToLlvmType($1.type); // TODO: handle set
+                               string return_type = fancTypeToLlvmType($1.type);
                                codeManager.emit("call " + return_type + " @" + $1.name + "()");
                         }
                         catch(Exceptions::IdentifierDoesNotExistException &e){
@@ -547,9 +597,12 @@ ExpList:		Exp {   $$ = ExpList();
 Type:			INT {$$ = Type("INT");}
                     | BYTE{$$ =  Type("BYTE");}
                     | BOOL {$$ =  Type("BOOL");}
-                    | SET LBRACKET NUM{$$ = Type("SET"); $3.name = yylval.name; } DOTS NUM RBRACKET {
+                    | SET LBRACKET NUM {$$ = Type("SET"); $3.name = yylval.name; } DOTS NUM RBRACKET {
                         isSetSize($3.name, yylval.name);
                         $$ = Type("SET");
+
+                        $$.setBegin = $3.name;
+                        $$.setEnd = $6.name;
                     };
 
 Exp:			LPAREN Exp RPAREN {
@@ -589,8 +642,7 @@ Exp:			LPAREN Exp RPAREN {
                             string errStr = Framework::getInstance().freshString("Error division by zero");
                             //string errStrPtr = Framework::getInstance().freshTemp();
                             //codeManager.emit(errStrPtr + " = getelementptr [24 x i8], [24 x i8]* " + errStr + ", i32 0, i32 0");
-                            codeManager.emit("call void (i8*) @print(i8* " + errStr + " )");
-                            codeManager.emit("call void (i32) @exit(i32 0)");
+                            codeManager.emitException(errStr);
                             codeManager.emitJmp(noDivisionBy0Label);
                             codeManager.emitLabel(noDivisionBy0Label);
                         }
@@ -723,16 +775,7 @@ Exp:			LPAREN Exp RPAREN {
                         if ($2.name == ">=") operation = "sge";
                         if ($2.name == "<=") operation = "sle";
 
-                        //load operands
-                        string operand1 = $1.place;
-                        string operand2 = $3.place;
-
-                        //test for relation
-                        string boolRelation = Framework::getInstance().freshTemp();
-                        codeManager.emitCond(operation, operand1, operand2, boolRelation);
-
-                        //jump accordingly
-                        pair<bpatch_address, bpatch_address> bpatchRequests = codeManager.emitBpatchIf(boolRelation);
+                        pair<bpatch_address, bpatch_address> bpatchRequests = compare($1.place, $3.place, operation);
                         $$.trueList = codeManager.makelist(bpatchRequests.first);
                         $$.falseList = codeManager.makelist(bpatchRequests.second);
                     }
@@ -746,15 +789,24 @@ Exp:			LPAREN Exp RPAREN {
                         }
 
                         // load operands
-                        string operand1 = $1.place;
-                        string operand2 = $3.place;
+                        string operandNum = $1.place;
+                        string operandSet = $3.place;
 
-                        // TODO: check within range
+                        checkInRange(operandSet, operandNum, "in");
 
-                        // check if in set
+                        //----------check if in set----------
+                        string setArray = Framework::getInstance().freshTemp();
+                        codeManager.emit(setArray + " = extractvalue " + SET_def + " " + operandSet + ", 3");
+                        string setBegin = Framework::getInstance().freshTemp();
+                        codeManager.emitSetExtractBegin(operandSet, setBegin);
+                        string arrayIndex = Framework::getInstance().freshTemp();
+                        codeManager.emitBinop(operandNum, setBegin, arrayIndex, "sub");
+                        string arrInMemPtr = Framework::getInstance().freshTemp();
+                        codeManager.emit(arrInMemPtr + " = alloca [256 x i1]");
+                        codeManager.emit("store [256 x i1] " + setArray + ", [256 x i1]* " + arrInMemPtr);
                         string locationPtr = Framework::getInstance().freshTemp();
-                        codeManager.emit(locationPtr + " = getelementptr [256 x i1], [256 x i1]* " + operand2 +
-                            ", i32 " + operand1 + ", i1 0");
+                        codeManager.emit(locationPtr + " = getelementptr [256 x i1], [256 x i1]* " + arrInMemPtr +
+                            ", i32 " + arrayIndex + ", i1 0");
                         string boolInclusion = Framework::getInstance().freshTemp();
                         codeManager.emit(boolInclusion + " = load i1, i1* " + locationPtr); //load i1
 
@@ -762,7 +814,7 @@ Exp:			LPAREN Exp RPAREN {
                         pair<bpatch_address, bpatch_address> bpatchRequests = codeManager.emitBpatchIf(boolInclusion);
                         $$.trueList.push_back(bpatchRequests.first);
                         $$.falseList.push_back(bpatchRequests.second);
-                    } // FIXME : use struct
+                    }
                     | Exp RELOP_EQUALITY Exp {
                         if(($1.type != "INT" && $1.type != "BYTE") || ($3.type != "INT" && $3.type != "BYTE")){
                              output::errorMismatch(yylineno);
@@ -795,8 +847,10 @@ Exp:			LPAREN Exp RPAREN {
                             $$ =  Exp("INT");
                         }
 
-                        $$.place = $4.place;
-                    }; // TODO: cast set to int - return size
+                        string& setPtr = $4.place;
+                        $$.place = Framework::getInstance().freshTemp();
+                        codeManager.emitSetExtractNumElems(setPtr, $$.place);
+                    };
 marker_RPAREN:      /*epsilon*/ {
     Framework::getInstance().addScope(Scope::IF);
 

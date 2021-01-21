@@ -143,6 +143,34 @@ void CodeBuffer::emitZext(const string &sizeSrc, const string &src, const string
 	emit(dest + " = zext " + sizeSrc + " " + src + " to i32");
 }
 
+void CodeBuffer::emitSetExtractBegin(const string &setPtr, const string &dest) {
+	emit(dest + " = extractvalue " + SET_def + " " + setPtr + ", 0");
+}
+
+void CodeBuffer::emitSetExtractEnd(const string &setPtr, const string &dest) {
+	emit(dest + " = extractvalue " + SET_def + " " + setPtr + ", 1");
+}
+
+void CodeBuffer::emitSetExtractNumElems(const string &setPtr, const string &dest) {
+	emit(dest + " = extractvalue " + SET_def + " " + setPtr + ", 2");
+}
+
+void CodeBuffer::emitException(const string &errStr) {
+	emit("call void (i8*) @print(i8* " + errStr + " )");
+	emit("call void (i32) @exit(i32 0)");
+	emit("unreachable");
+}
+
+void CodeBuffer::emitNewSet(const string& setBegin, const string& setEnd, const string &dest) {
+	string phase1 = Framework::getInstance().freshTemp();
+	string phase2 = Framework::getInstance().freshTemp();
+	string phase3 = Framework::getInstance().freshTemp();
+	emit(phase1 + " = insertvalue " + SET_def + " undef, i32 " + setBegin + ", 0");
+	emit(phase2 + " = insertvalue " + SET_def + " " + phase1 + ", i32 " + setEnd + ", 1");
+	emit(phase3 + " = insertvalue " + SET_def + " " + phase2 + ", i32 0, 2");
+	emit(dest + " = insertvalue " + SET_def + " " + phase3 + ", [256 x i1] zeroinitializer, 3");
+}
+
 // ******** Helper Methods ********** //
 bool replace(string& str, const string& from, const string& to, const BranchLabelIndex index) {
 	size_t pos;

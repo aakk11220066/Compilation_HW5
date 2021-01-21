@@ -25,6 +25,8 @@ public:
     bpatch_list falseList = bpatch_list();
     bpatch_list nextList = bpatch_list();
     string label = "";
+    string setBegin = "";
+    string setEnd = "";
 
     NonTerminal() = default;
     NonTerminal(const string& name, const string& type) : name(name), type(type) {}
@@ -39,6 +41,8 @@ public:
         falseList = other.falseList;
         nextList = other.nextList;
         label = other.label;
+        setBegin = other.setBegin;
+        setEnd = other.setEnd;
         return *this;
     };
 };

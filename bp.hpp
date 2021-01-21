@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <string>
+#include "Framework.h"
 
 using namespace std;
 
@@ -11,6 +12,7 @@ using namespace std;
 enum BranchLabelIndex {FIRST, SECOND};
 
 typedef pair<int,BranchLabelIndex> bpatch_address;
+const string SET_def = "{i32, i32, i32, [256 x i1]}";
 
 class CodeBuffer{
 	CodeBuffer();
@@ -68,7 +70,7 @@ public:
 	void emitTransfer(const string& src, const string& dest);
 	void emitBinop(const string& src1, const string& src2, const string& dest, const string& binop);
 	void emitLabel(const string& name);
-	string emitCond(const string &operation, const string &src1, const string &src2);
+	void emitCond(const string &operation, const string &src1, const string &src2, const string& dest);
 	void emitIf(const string& cond, const string& ifTrueLabel, const string& ifFalseLabel);
 	void emitJmp(const string& dest);
 	pair<bpatch_address, bpatch_address> emitBpatchIf(const string& cond);
@@ -81,6 +83,11 @@ public:
 				 const string& dest
  	);
 	void emitZext(const string& sizeSrc, const string& src, const string& dest);
+	void emitSetExtractBegin(const string& setPtr, const string& dest);
+	void emitSetExtractEnd(const string& setPtr, const string& dest);
+	void emitSetExtractNumElems(const string& setPtr, const string& dest);
+	void emitException(const string& errStr);
+	void emitNewSet(const string& setBegin, const string& setEnd, const string& dest);
 };
 
 #endif

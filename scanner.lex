@@ -34,7 +34,7 @@ int                         return INT;
 byte                        return BYTE;
 b                           return B;
 bool                        return BOOL;
-set                         return SET;
+set                         return SET_def;
 and                         return AND;
 or                          return OR;
 not                         return NOT;
