@@ -276,7 +276,6 @@
 %nonassoc TRUE FALSE RETURN BREAK CONTINUE DOTS ID NUM STRING SET INT BYTE B BOOL VOID
 
 %%
-//TODO: zero-init set
 
 Program:		Funcs {
                     assert($1.nextList.empty());
@@ -795,18 +794,27 @@ Exp:			LPAREN Exp RPAREN {
                         checkInRange(operandSet, operandNum, "in");
 
                         //----------check if in set----------
+                        //get array from set
                         string setArray = Framework::getInstance().freshTemp();
                         codeManager.emit(setArray + " = extractvalue " + SET_def + " " + operandSet + ", 3");
+
+                        //get lower bound of set
                         string setBegin = Framework::getInstance().freshTemp();
                         codeManager.emitSetExtractBegin(operandSet, setBegin);
+
+                        //get index of set that indicates if requested number is in set
                         string arrayIndex = Framework::getInstance().freshTemp();
                         codeManager.emitBinop(operandNum, setBegin, arrayIndex, "sub");
+
+                        //push array into memory so that we can extract a bit from it.  locationPtr points to bit
                         string arrInMemPtr = Framework::getInstance().freshTemp();
                         codeManager.emit(arrInMemPtr + " = alloca [256 x i1]");
                         codeManager.emit("store [256 x i1] " + setArray + ", [256 x i1]* " + arrInMemPtr);
                         string locationPtr = Framework::getInstance().freshTemp();
                         codeManager.emit(locationPtr + " = getelementptr [256 x i1], [256 x i1]* " + arrInMemPtr +
                             ", i32 " + arrayIndex + ", i1 0");
+
+                        //extract bit from locationPtr
                         string boolInclusion = Framework::getInstance().freshTemp();
                         codeManager.emit(boolInclusion + " = load i1, i1* " + locationPtr); //load i1
 
