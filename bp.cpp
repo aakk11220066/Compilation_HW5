@@ -75,6 +75,10 @@ void CodeBuffer::emitLoad(const string& src, const string& dest) {
 	emit(dest + " = load i32, i32* " + src + ", align 4");
 }
 
+void CodeBuffer::emitLoadSet(const string& src, const string& dest) {
+	emit(dest + " = load " + SET_def + ", " + SET_def + "* " + src + ", align 4");
+}
+
 void CodeBuffer::emitLoadBool(const string &src, const string &dest) {
 	emit(dest + " = load i1, i1* " + src + ", align 4");
 }
@@ -82,6 +86,11 @@ void CodeBuffer::emitLoadBool(const string &src, const string &dest) {
 void CodeBuffer::emitStore(const string& src, const string& dest) {
 	emit("store i32 " + src + ", i32* " + dest + ", align 4");
 }
+
+void CodeBuffer::emitStoreSet(const string &src, const string &dest) {
+	emit("store " + SET_def + " " + src + ", " + SET_def + "* " + dest + ", align 4");
+}
+
 void CodeBuffer::emitStoreBool(const string &src, const string &dest) {
 	emit("store i1 " + src + ", i1* " + dest + ", align 4");
 }
@@ -121,7 +130,7 @@ void CodeBuffer::emitFuncOpen(const string &name, const string& retType, const s
 }
 
 void CodeBuffer::emitFuncClose(const string& retType) {
-	if (retType == "void") emit("ret void");
+	if (retType == "void ") emit("ret void");
 	emit("}");
 	emitEndLine();
 }
@@ -171,6 +180,7 @@ void CodeBuffer::emitNewSet(const string& setBegin, const string& setEnd, const 
 	emit(phase3 + " = insertvalue " + SET_def + " " + phase2 + ", i32 0, 2");
 	emit(dest + " = insertvalue " + SET_def + " " + phase3 + ", [256 x i1] zeroinitializer, 3");
 }
+
 
 // ******** Helper Methods ********** //
 bool replace(string& str, const string& from, const string& to, const BranchLabelIndex index) {

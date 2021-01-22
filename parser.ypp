@@ -36,7 +36,7 @@
     void isSetSize(const string& first_num_string, const string& second_num_string){
         int first_num = std::stoi(first_num_string);
         int second_num = std::stoi(second_num_string);
-        if (second_num - first_num > 255 || second_num - first_num <= 0){
+        if (second_num - first_num > 256 || second_num - first_num <= 0){
             output::errorSetTooLarge(yylineno, first_num_string, second_num_string);
             myExit();
         }
@@ -108,6 +108,47 @@
         codeManager.emitLabel(inRangeLabel);
     }
 
+    string storeReg(const string& reg, bool isSet){
+        string result = "";
+        if (!isSet){
+            result = Framework::getInstance().freshVar("i32");
+            codeManager.emitStore(reg, result);
+        }
+        else{
+            result = Framework::getInstance().freshVar(SET_def);
+            codeManager.emitStoreSet(reg, result);
+        }
+        return result;
+    }
+
+    string storeOverwriteReg(const string& newVal, const string& overwriteLoc,  bool isSet){
+        string result = "";
+        if (!isSet){
+            codeManager.emitStore(newVal, overwriteLoc);
+        }
+        else{
+            codeManager.emitStoreSet(newVal, overwriteLoc);
+        }
+        return result;
+    }
+
+    string loadFromPtr(const string& ptr, bool isSet){
+        string result = Framework::getInstance().freshTemp();
+        if (!isSet) {
+            codeManager.emitLoad(ptr, result);
+        }
+        else{
+            codeManager.emitLoadSet(ptr, result);
+        }
+        return result;
+    }
+
+    string byteTruncated(const string& regToTruncate){
+        string result = Framework::getInstance().freshTemp();
+        codeManager.emit(result + " = urem i32 " + regToTruncate + ", 256");
+        return result;
+    }
+
 	//NonTerminal classes
     class Program : public NonTerminal{};
     class Funcs : public NonTerminal{};
@@ -166,6 +207,11 @@
     };
 
     static string typeBinopAddChecking(string type1, string type2){
+        if ((type1 != "SET" && type1 != "INT" && type1 != "BYTE") ||
+            (type2 != "SET" && type2 != "INT" && type2 != "BYTE")) {
+            output::errorMismatch(yylineno);
+            myExit();
+        }
         if(
             ((type1 == "SET" && type2 == "BYTE") || (type1 == "SET" && type2 == "INT")) ||
             ((type2 == "SET" && type1 == "BYTE") || (type2 == "SET" && type1 == "INT"))){
@@ -276,8 +322,6 @@
 %nonassoc TRUE FALSE RETURN BREAK CONTINUE DOTS ID NUM STRING SET INT BYTE B BOOL VOID
 
 %%
-// TODO: test integer overflow
-// TODO: fix byte overflow - with unsigned modulo operation in binop
 // TODO: add ret even if return not given
 
 Program:		Funcs {
@@ -299,8 +343,11 @@ FuncDecl:		RetType
                         Framework::getInstance().addParamToLastFunc(param);
 
                         ++numParamsAddedSoFar;
-                        Variable offsetFixedParam = Variable(param.name, param.type,
-                            -numParamsAddedSoFar, "%" + to_string(numParamsAddedSoFar - 1)
+                        Variable offsetFixedParam = Variable(
+                            param.name,
+                            param.type,
+                            -numParamsAddedSoFar,
+                            "%" + to_string(numParamsAddedSoFar - 1)
                         );
                         Framework::getInstance().insertVariableIntoTopScope(offsetFixedParam);
                     }
@@ -311,16 +358,20 @@ FuncDecl:		RetType
                     string params = "";
                     if (! $5.namesAndTypes.empty()){
                         for (const Variable& param : $5.namesAndTypes){
-                            params += string(", ") + retType + param.LLVM_register;
+                            params += string(", ") + retType;
                         }
                         params = params.substr(2);
                     }
                     codeManager.emitFuncOpen($2.name, retType, params);
+                    for (const Variable& param : $5.namesAndTypes){
+                        string& paramReg = dynamic_cast<Variable&>(Framework::getInstance()[param.name]).LLVM_register;
+                        paramReg = storeReg(paramReg, param.type == "SET");
+                    }
                 }
                 Statements
                 RBRACE {
                     string retType = fancTypeToLlvmType($1.type);
-                    codeManager.emitFuncClose(retType`);
+                    codeManager.emitFuncClose(retType);
                     Framework::getInstance().popScope();
 
                     assert($10.nextList.empty());
@@ -360,7 +411,7 @@ Statements:		Statement {
                         $$.falseList = codeManager.merge($3.falseList, $1.falseList);
                         $$.trueList = codeManager.merge($3.trueList, $1.trueList);
                     } ; // DONE: backpatch
-Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}  // TODO: load and store variables on stack
+Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                 Statements {Framework::getInstance().popScope();}
                 RBRACE {
                     $$.nextList = $3.nextList;
@@ -378,24 +429,14 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}  // TODO: 
                         else{
                             codeManager.emitNewSet($1.setBegin, $1.setEnd, initReg);
                         }
-                        dynamic_cast<Variable&>(Framework::getInstance()[$2.name]).LLVM_register = initReg;
+                        dynamic_cast<Variable&>(Framework::getInstance()[$2.name]).LLVM_register = storeReg(initReg, $1.type == "SET");
                     }
                     | Type ID ASSIGN Exp SC {
                         Framework::getInstance().insertVariableIntoTopScope(Variable($2.name,$1.type));
                         assignTypeCheck($1.type,$4.type);
 
                         if ($4.type == "BOOL") insertBoolIntoRegister($4);
-                        /*if ($4.type == "BOOL") {
-                            string ext = Framework::getInstance().freshTemp();
-                            codeManager.emitZext("i1", $4.place, ext);
-                            $4.place = ext;
-                        }
-                        if ($4.type == "BYTE") {
-                            string ext = Framework::getInstance().freshTemp();
-                            codeManager.emitZext("i8", $4.place, ext);
-                            $4.place = ext;
-                        }*/
-                        dynamic_cast<Variable&>(Framework::getInstance()[$2.name]).LLVM_register = $4.place;
+                        dynamic_cast<Variable&>(Framework::getInstance()[$2.name]).LLVM_register = storeReg($4.place, $4.type == "SET");
                     }
                     | ID ASSIGN Exp SC {
                         string accepting_type = Framework::getInstance()[$1.name].type;
@@ -406,17 +447,11 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}  // TODO: 
                         }
 
                         if ($3.type == "BOOL") insertBoolIntoRegister($3);
-                        /*if ($4.type == "BOOL") {
-                            string ext = Framework::getInstance().freshTemp();
-                            codeManager.emitZext("i1", $4.place, ext);
-                            $4.place = ext;
-                        }
-                        if ($4.type == "BYTE") {
-                            string ext = Framework::getInstance().freshTemp();
-                            codeManager.emitZext("i8", $4.place, ext);
-                            $4.place = ext;
-                        }*/
-                        dynamic_cast<Variable&>(Framework::getInstance()[$1.name]).LLVM_register = $3.place;
+                        storeOverwriteReg(
+                            $3.place,
+                            dynamic_cast<Variable&>(Framework::getInstance()[$1.name]).LLVM_register,
+                            $3.type == "SET"
+                        );
                     }
 
                     | Call SC {}
@@ -623,7 +658,7 @@ Exp:			LPAREN Exp RPAREN {
                             string operand2 = $3.place;
                             string addResult = Framework::getInstance().freshTemp();
                             codeManager.emitBinop(operand1, operand2, addResult, operation);
-                            $$.place = addResult;
+                            $$.place = (res_type == "BYTE")? byteTruncated(addResult) : addResult;
                         }
                         else{
                             string operandNum = ($1.type != "SET")? $1.place : $3.place;
@@ -674,7 +709,7 @@ Exp:			LPAREN Exp RPAREN {
                             string newSetSize = Framework::getInstance().freshTemp();
                             codeManager.emitBinop(oldSetSize, "1", newSetSize, operation);
                             string sizeUpdatedNewSet = Framework::getInstance().freshTemp();
-                            codeManager.emit(sizeUpdatedNewSet + " = insertvalue " + SET_def + ", i32 " + newSetSize + ", 2");
+                            codeManager.emit(sizeUpdatedNewSet + " = insertvalue " + SET_def + " " + newSet + ", i32 " + newSetSize + ", 2");
 
                             //update operandSet.place
                             $$.place = sizeUpdatedNewSet;
@@ -709,7 +744,7 @@ Exp:			LPAREN Exp RPAREN {
                         // perform multiplication
                         string multResult = Framework::getInstance().freshTemp();
                         codeManager.emitBinop(operand1, operand2, multResult, operation);
-                        $$.place = multResult;
+                        $$.place = (res_type == "BYTE")? byteTruncated(multResult) : multResult;
                     }
                     | ID {
                         try{
@@ -724,7 +759,19 @@ Exp:			LPAREN Exp RPAREN {
                             myExit();
                         }
 
-                        $$.place = dynamic_cast<Variable&>(Framework::getInstance()[$1.name]).LLVM_register;
+                        const string& type = Framework::getInstance()[$1.name].type;
+                        const string& val = loadFromPtr(
+                            dynamic_cast<Variable&>(Framework::getInstance()[$1.name]).LLVM_register,
+                            type == "SET"
+                        );
+                        if (type != "BOOL"){
+                            $$.place = val;
+                        }
+                        else{
+                            pair<bpatch_address, bpatch_address> bpatchRequests = compare(val, "1", "eq");
+                            $$.trueList = codeManager.makelist(bpatchRequests.first);
+                            $$.falseList = codeManager.makelist(bpatchRequests.second);
+                        }
                     }
                     | Call {
                         $$ =  Exp($1.type);

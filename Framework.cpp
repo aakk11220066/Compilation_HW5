@@ -130,9 +130,9 @@ std::string Framework::freshVarBool() {
     return result;
 }
 
-std::string Framework::freshVar(){
+std::string Framework::freshVar(const string& varType){
     string result = "%v" + to_string(nextRegister++);
-    codeManager.emit(result + " = alloca i32" + ", align 4");
+    codeManager.emit(result + " = alloca " + varType + ", align 4");
     return result;
 }
 

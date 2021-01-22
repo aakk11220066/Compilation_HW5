@@ -41,7 +41,7 @@ protected:
 
 public:
     std::string freshLabel(const std::string& name);
-    std::string freshVar();
+    std::string freshVar(const string& varType);
     std::string freshTemp();
     std::string freshVarBool();
     std::string freshString(const string& str);

@@ -65,8 +65,10 @@ public:
 
 	//********* Wrapper methods for various emits ********* //
 	void emitLoad(const string& src, const string& dest);
+	void emitLoadSet(const string& src, const string& dest);
 	void emitLoadBool(const string& src, const string& dest);
 	void emitStore(const string& src, const string& dest);
+	void emitStoreSet(const string& src, const string& dest);
 	void emitStoreBool(const string& src, const string& dest);
 	void emitTransfer(const string& src, const string& dest);
 	void emitBinop(const string& src1, const string& src2, const string& dest, const string& binop);
