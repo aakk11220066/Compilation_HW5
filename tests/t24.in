@@ -1,0 +1,10 @@
+int kiv(int abc){
+	return abc;
+}
+void main(){
+	bool isTrue = 1 + 2 < 4;
+	if (isTrue){
+		printi(kiv(69));
+	}
+	return;
+}

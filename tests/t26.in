@@ -1,0 +1,7 @@
+void main(){
+	byte a;
+	while (true){
+		a = a + 1b;
+		printi(a);
+	}
+}

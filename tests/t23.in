@@ -1,0 +1,11 @@
+void main(){
+	set[10..265] s;
+	s = s + 14b;
+	bool d = 14 in s;
+	if (d) printi(14);
+	s = s - 14;
+	bool e = 14 in s;
+	if (not e) printi(14);
+	s = s + 3;
+	return;
+}

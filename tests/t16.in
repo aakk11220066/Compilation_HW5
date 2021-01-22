@@ -1,0 +1,7 @@
+void main(){
+	int a = 4;
+	byte c = 6b;
+	printi(a);
+	printi(c);
+	return;
+}

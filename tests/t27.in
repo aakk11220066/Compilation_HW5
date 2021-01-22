@@ -1,0 +1,7 @@
+void main(){
+	int a;
+	while (true){
+		a = a + 100000;
+		printi(a);
+	}
+}

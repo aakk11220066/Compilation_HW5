@@ -1,0 +1,10 @@
+void main(){
+	set[10..265] s;
+	printi((int) s);
+	s = s + 14b;
+	printi((int) s);
+	s = s - 14;
+	printi((int) s);
+	
+	return;
+}

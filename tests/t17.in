@@ -1,0 +1,12 @@
+void main(){
+	int a = 4;
+	byte c = 6b;
+	printi(a);
+	printi(c);
+	bool d = a < c;
+	//printi(d + 0);
+	if (d){
+		print("yay!");
+	}
+	return;
+}

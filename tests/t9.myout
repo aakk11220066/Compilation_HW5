@@ -1,0 +1,35 @@
+declare void @exit(i32)
+declare i32 @printf(i8*, ...)
+
+@.int_specifier = internal constant [4 x i8] c"%d\0A\00"
+define void @printi(i32) {call i32 (i8*, ...) @printf(i8* getelementptr ([4 x i8], [4 x i8]* @.int_specifier, i32 0, i32 0), i32 %0) ret void}
+
+@.str_specifier = internal constant [3 x i8] c"%s\00"
+define void @print(i8*) {call i32 (i8*, ...) @printf(i8* getelementptr ([3 x i8], [3 x i8]* @.str_specifier, i32 0, i32 0), i8* %0) ret void}
+
+
+define i32  @kiv(i32 ){
+entry:
+%v0 = alloca i32, align 4
+store i32 %0, i32* %v0, align 4
+%t1 = load i32, i32* %v0, align 4
+ret i32  %t1
+}
+
+define void  @main(){
+entry:
+%t2 = add i32 1, 0
+%t3 = add i32 2, 0
+%t4 = add i32 %t2, %t3
+%t5 = add i32 4, 0
+%t6 = icmp slt i32 %t4, %t5
+br i1 %t6, label %label0_enterIfCode, label %label1_statementsNext
+label0_enterIfCode:
+%t7 = add i32 69, 0
+%t8 = call i32  @kiv(i32 %t7 )
+call void @printi(i32 %t8 )
+br label %label1_statementsNext
+label1_statementsNext:
+ret void
+}
+

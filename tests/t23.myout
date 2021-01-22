@@ -1,0 +1,203 @@
+declare void @exit(i32)
+declare i32 @printf(i8*, ...)
+
+@.int_specifier = internal constant [4 x i8] c"%d\0A\00"
+define void @printi(i32) {call i32 (i8*, ...) @printf(i8* getelementptr ([4 x i8], [4 x i8]* @.int_specifier, i32 0, i32 0), i32 %0) ret void}
+
+@.str_specifier = internal constant [3 x i8] c"%s\00"
+define void @print(i8*) {call i32 (i8*, ...) @printf(i8* getelementptr ([3 x i8], [3 x i8]* @.str_specifier, i32 0, i32 0), i8* %0) ret void}
+
+@.str11 = internal constant [31 x i8] c"Error out of set range. Op: +\0A\00"
+@.str29 = internal constant [32 x i8] c"Error out of set range. Op: in\0A\00"
+@.str48 = internal constant [31 x i8] c"Error out of set range. Op: -\0A\00"
+@.str66 = internal constant [32 x i8] c"Error out of set range. Op: in\0A\00"
+@.str85 = internal constant [31 x i8] c"Error out of set range. Op: +\0A\00"
+
+define void  @main(){
+entry:
+%t1 = insertvalue {i32, i32, i32, [256 x i1]} undef, i32 10, 0
+%t2 = insertvalue {i32, i32, i32, [256 x i1]} %t1, i32 265, 1
+%t3 = insertvalue {i32, i32, i32, [256 x i1]} %t2, i32 0, 2
+%t0 = insertvalue {i32, i32, i32, [256 x i1]} %t3, [256 x i1] zeroinitializer, 3
+%v4 = alloca {i32, i32, i32, [256 x i1]}, align 4
+store {i32, i32, i32, [256 x i1]} %t0, {i32, i32, i32, [256 x i1]}* %v4, align 4
+br label %label0_statementsNext
+label0_statementsNext:
+%t5 = load {i32, i32, i32, [256 x i1]}, {i32, i32, i32, [256 x i1]}* %v4, align 4
+%t6 = add i32 14, 0
+%t7 = extractvalue {i32, i32, i32, [256 x i1]} %t5, 0
+%t8 = extractvalue {i32, i32, i32, [256 x i1]} %t5, 1
+%t9 = icmp sgt i32 %t7, %t6
+br i1 %t9, label %label1_outOfRangeError, label %label2_maybeInRange
+label2_maybeInRange:
+%t10 = icmp slt i32 %t8, %t6
+br i1 %t10, label %label1_outOfRangeError, label %label3_inRange
+label1_outOfRangeError:
+%str_ptr11 = getelementptr [31 x i8], [31 x i8]* @.str11, i32 0, i32 0
+call void (i8*) @print(i8* %str_ptr11 )
+call void (i32) @exit(i32 0)
+unreachable
+label3_inRange:
+%t12 = extractvalue {i32, i32, i32, [256 x i1]} %t5, 3
+%t13 = alloca [256 x i1]
+store [256 x i1] %t12, [256 x i1]* %t13
+%t14 = extractvalue {i32, i32, i32, [256 x i1]} %t5, 0
+%t15 = sub i32 %t6, %t14
+%t16 = getelementptr [256 x i1], [256 x i1]* %t13, i1 0, i32 %t15
+store i1 1, i1* %t16
+%t17 = load [256 x i1], [256 x i1]* %t13, align 4
+%t18 = insertvalue {i32, i32, i32, [256 x i1]} %t5, [256 x i1] %t17, 3
+%t19 = extractvalue {i32, i32, i32, [256 x i1]} %t5, 2
+%t20 = add i32 %t19, 1
+%t21 = insertvalue {i32, i32, i32, [256 x i1]} %t18, i32 %t20, 2
+%v22 = alloca {i32, i32, i32, [256 x i1]}, align 4
+store {i32, i32, i32, [256 x i1]} %t21, {i32, i32, i32, [256 x i1]}* %v22, align 4
+br label %label4_statementsNext
+label4_statementsNext:
+%t23 = add i32 14, 0
+%t24 = load {i32, i32, i32, [256 x i1]}, {i32, i32, i32, [256 x i1]}* %v22, align 4
+%t25 = extractvalue {i32, i32, i32, [256 x i1]} %t24, 0
+%t26 = extractvalue {i32, i32, i32, [256 x i1]} %t24, 1
+%t27 = icmp sgt i32 %t25, %t23
+br i1 %t27, label %label5_outOfRangeError, label %label6_maybeInRange
+label6_maybeInRange:
+%t28 = icmp slt i32 %t26, %t23
+br i1 %t28, label %label5_outOfRangeError, label %label7_inRange
+label5_outOfRangeError:
+%str_ptr29 = getelementptr [32 x i8], [32 x i8]* @.str29, i32 0, i32 0
+call void (i8*) @print(i8* %str_ptr29 )
+call void (i32) @exit(i32 0)
+unreachable
+label7_inRange:
+%t30 = extractvalue {i32, i32, i32, [256 x i1]} %t24, 3
+%t31 = extractvalue {i32, i32, i32, [256 x i1]} %t24, 0
+%t32 = sub i32 %t23, %t31
+%t33 = alloca [256 x i1]
+store [256 x i1] %t30, [256 x i1]* %t33
+%t34 = getelementptr [256 x i1], [256 x i1]* %t33, i1 0, i32 %t32
+%t35 = load i1, i1* %t34
+br i1 %t35, label %label8_IfTrue, label %label9_IfFalse
+label8_IfTrue:
+br label %label10_assignBool
+label9_IfFalse:
+br label %label10_assignBool
+label10_assignBool:
+%t36 = phi i32 [1, %label8_IfTrue], [0, %label9_IfFalse]
+%v37 = alloca i32, align 4
+store i32 %t36, i32* %v37, align 4
+br label %label11_statementsNext
+label11_statementsNext:
+%t38 = load i32, i32* %v37, align 4
+%t39 = icmp eq i32 %t38, 1
+br i1 %t39, label %label12_enterIfCode, label %label13_statementsNext
+label12_enterIfCode:
+%t40 = add i32 14, 0
+call void @printi(i32 %t40 )
+br label %label13_statementsNext
+label13_statementsNext:
+%t42 = load {i32, i32, i32, [256 x i1]}, {i32, i32, i32, [256 x i1]}* %v22, align 4
+%t43 = add i32 14, 0
+%t44 = extractvalue {i32, i32, i32, [256 x i1]} %t42, 0
+%t45 = extractvalue {i32, i32, i32, [256 x i1]} %t42, 1
+%t46 = icmp sgt i32 %t44, %t43
+br i1 %t46, label %label14_outOfRangeError, label %label15_maybeInRange
+label15_maybeInRange:
+%t47 = icmp slt i32 %t45, %t43
+br i1 %t47, label %label14_outOfRangeError, label %label16_inRange
+label14_outOfRangeError:
+%str_ptr48 = getelementptr [31 x i8], [31 x i8]* @.str48, i32 0, i32 0
+call void (i8*) @print(i8* %str_ptr48 )
+call void (i32) @exit(i32 0)
+unreachable
+label16_inRange:
+%t49 = extractvalue {i32, i32, i32, [256 x i1]} %t42, 3
+%t50 = alloca [256 x i1]
+store [256 x i1] %t49, [256 x i1]* %t50
+%t51 = extractvalue {i32, i32, i32, [256 x i1]} %t42, 0
+%t52 = sub i32 %t43, %t51
+%t53 = getelementptr [256 x i1], [256 x i1]* %t50, i1 0, i32 %t52
+store i1 0, i1* %t53
+%t54 = load [256 x i1], [256 x i1]* %t50, align 4
+%t55 = insertvalue {i32, i32, i32, [256 x i1]} %t42, [256 x i1] %t54, 3
+%t56 = extractvalue {i32, i32, i32, [256 x i1]} %t42, 2
+%t57 = sub i32 %t56, 1
+%t58 = insertvalue {i32, i32, i32, [256 x i1]} %t55, i32 %t57, 2
+%v59 = alloca {i32, i32, i32, [256 x i1]}, align 4
+store {i32, i32, i32, [256 x i1]} %t58, {i32, i32, i32, [256 x i1]}* %v59, align 4
+br label %label17_statementsNext
+label17_statementsNext:
+%t60 = add i32 14, 0
+%t61 = load {i32, i32, i32, [256 x i1]}, {i32, i32, i32, [256 x i1]}* %v59, align 4
+%t62 = extractvalue {i32, i32, i32, [256 x i1]} %t61, 0
+%t63 = extractvalue {i32, i32, i32, [256 x i1]} %t61, 1
+%t64 = icmp sgt i32 %t62, %t60
+br i1 %t64, label %label18_outOfRangeError, label %label19_maybeInRange
+label19_maybeInRange:
+%t65 = icmp slt i32 %t63, %t60
+br i1 %t65, label %label18_outOfRangeError, label %label20_inRange
+label18_outOfRangeError:
+%str_ptr66 = getelementptr [32 x i8], [32 x i8]* @.str66, i32 0, i32 0
+call void (i8*) @print(i8* %str_ptr66 )
+call void (i32) @exit(i32 0)
+unreachable
+label20_inRange:
+%t67 = extractvalue {i32, i32, i32, [256 x i1]} %t61, 3
+%t68 = extractvalue {i32, i32, i32, [256 x i1]} %t61, 0
+%t69 = sub i32 %t60, %t68
+%t70 = alloca [256 x i1]
+store [256 x i1] %t67, [256 x i1]* %t70
+%t71 = getelementptr [256 x i1], [256 x i1]* %t70, i1 0, i32 %t69
+%t72 = load i1, i1* %t71
+br i1 %t72, label %label21_IfTrue, label %label22_IfFalse
+label21_IfTrue:
+br label %label23_assignBool
+label22_IfFalse:
+br label %label23_assignBool
+label23_assignBool:
+%t73 = phi i32 [1, %label21_IfTrue], [0, %label22_IfFalse]
+%v74 = alloca i32, align 4
+store i32 %t73, i32* %v74, align 4
+br label %label24_statementsNext
+label24_statementsNext:
+%t75 = load i32, i32* %v74, align 4
+%t76 = icmp eq i32 %t75, 1
+br i1 %t76, label %label25_enterIfCode, label %label26_statementsNext
+label25_enterIfCode:
+%t77 = add i32 14, 0
+call void @printi(i32 %t77 )
+br label %label26_statementsNext
+label26_statementsNext:
+%t79 = load {i32, i32, i32, [256 x i1]}, {i32, i32, i32, [256 x i1]}* %v59, align 4
+%t80 = add i32 3, 0
+%t81 = extractvalue {i32, i32, i32, [256 x i1]} %t79, 0
+%t82 = extractvalue {i32, i32, i32, [256 x i1]} %t79, 1
+%t83 = icmp sgt i32 %t81, %t80
+br i1 %t83, label %label27_outOfRangeError, label %label28_maybeInRange
+label28_maybeInRange:
+%t84 = icmp slt i32 %t82, %t80
+br i1 %t84, label %label27_outOfRangeError, label %label29_inRange
+label27_outOfRangeError:
+%str_ptr85 = getelementptr [31 x i8], [31 x i8]* @.str85, i32 0, i32 0
+call void (i8*) @print(i8* %str_ptr85 )
+call void (i32) @exit(i32 0)
+unreachable
+label29_inRange:
+%t86 = extractvalue {i32, i32, i32, [256 x i1]} %t79, 3
+%t87 = alloca [256 x i1]
+store [256 x i1] %t86, [256 x i1]* %t87
+%t88 = extractvalue {i32, i32, i32, [256 x i1]} %t79, 0
+%t89 = sub i32 %t80, %t88
+%t90 = getelementptr [256 x i1], [256 x i1]* %t87, i1 0, i32 %t89
+store i1 1, i1* %t90
+%t91 = load [256 x i1], [256 x i1]* %t87, align 4
+%t92 = insertvalue {i32, i32, i32, [256 x i1]} %t79, [256 x i1] %t91, 3
+%t93 = extractvalue {i32, i32, i32, [256 x i1]} %t79, 2
+%t94 = add i32 %t93, 1
+%t95 = insertvalue {i32, i32, i32, [256 x i1]} %t92, i32 %t94, 2
+%v96 = alloca {i32, i32, i32, [256 x i1]}, align 4
+store {i32, i32, i32, [256 x i1]} %t95, {i32, i32, i32, [256 x i1]}* %v96, align 4
+br label %label30_statementsNext
+label30_statementsNext:
+ret void
+}
+

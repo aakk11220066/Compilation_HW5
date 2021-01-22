@@ -1,0 +1,56 @@
+declare void @exit(i32)
+declare i32 @printf(i8*, ...)
+
+@.int_specifier = internal constant [4 x i8] c"%d\0A\00"
+define void @printi(i32) {call i32 (i8*, ...) @printf(i8* getelementptr ([4 x i8], [4 x i8]* @.int_specifier, i32 0, i32 0), i32 %0) ret void}
+
+@.str_specifier = internal constant [3 x i8] c"%s\00"
+define void @print(i8*) {call i32 (i8*, ...) @printf(i8* getelementptr ([3 x i8], [3 x i8]* @.str_specifier, i32 0, i32 0), i8* %0) ret void}
+
+@.str15 = internal constant [6 x i8] c"yay!\0A\00"
+
+define void  @main(){
+entry:
+%t0 = add i32 4, 0
+%v1 = alloca i32, align 4
+store i32 %t0, i32* %v1, align 4
+br label %label0_statementsNext
+label0_statementsNext:
+%t2 = add i32 6, 0
+%v3 = alloca i32, align 4
+store i32 %t2, i32* %v3, align 4
+br label %label1_statementsNext
+label1_statementsNext:
+%t4 = load i32, i32* %v1, align 4
+call void @printi(i32 %t4 )
+br label %label2_statementsNext
+label2_statementsNext:
+%t6 = load i32, i32* %v3, align 4
+call void @printi(i32 %t6 )
+br label %label3_statementsNext
+label3_statementsNext:
+%t8 = load i32, i32* %v1, align 4
+%t9 = load i32, i32* %v3, align 4
+%t10 = icmp slt i32 %t8, %t9
+br i1 %t10, label %label4_IfTrue, label %label5_IfFalse
+label4_IfTrue:
+br label %label6_assignBool
+label5_IfFalse:
+br label %label6_assignBool
+label6_assignBool:
+%t11 = phi i32 [1, %label4_IfTrue], [0, %label5_IfFalse]
+%v12 = alloca i32, align 4
+store i32 %t11, i32* %v12, align 4
+br label %label7_statementsNext
+label7_statementsNext:
+%t13 = load i32, i32* %v12, align 4
+%t14 = icmp eq i32 %t13, 1
+br i1 %t14, label %label8_enterIfCode, label %label9_statementsNext
+label8_enterIfCode:
+%str_ptr15 = getelementptr [6 x i8], [6 x i8]* @.str15, i32 0, i32 0
+call void @print(i8* %str_ptr15 )
+br label %label9_statementsNext
+label9_statementsNext:
+ret void
+}
+

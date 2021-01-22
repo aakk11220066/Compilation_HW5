@@ -1,0 +1,8 @@
+void main(){
+	set[0..220] mySet;
+	bool d = 220 in mySet;
+	if (d) {
+		printi(220);
+	}
+	return;
+}

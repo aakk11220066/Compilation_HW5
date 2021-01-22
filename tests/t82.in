@@ -1,0 +1,6 @@
+void main(){
+	if (2 < 3){
+		printi(69);
+	}
+	return;
+}

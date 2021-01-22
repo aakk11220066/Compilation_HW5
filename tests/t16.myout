@@ -1,0 +1,33 @@
+declare void @exit(i32)
+declare i32 @printf(i8*, ...)
+
+@.int_specifier = internal constant [4 x i8] c"%d\0A\00"
+define void @printi(i32) {call i32 (i8*, ...) @printf(i8* getelementptr ([4 x i8], [4 x i8]* @.int_specifier, i32 0, i32 0), i32 %0) ret void}
+
+@.str_specifier = internal constant [3 x i8] c"%s\00"
+define void @print(i8*) {call i32 (i8*, ...) @printf(i8* getelementptr ([3 x i8], [3 x i8]* @.str_specifier, i32 0, i32 0), i8* %0) ret void}
+
+
+define void  @main(){
+entry:
+%t0 = add i32 4, 0
+%v1 = alloca i32, align 4
+store i32 %t0, i32* %v1, align 4
+br label %label0_statementsNext
+label0_statementsNext:
+%t2 = add i32 6, 0
+%v3 = alloca i32, align 4
+store i32 %t2, i32* %v3, align 4
+br label %label1_statementsNext
+label1_statementsNext:
+%t4 = load i32, i32* %v1, align 4
+call void @printi(i32 %t4 )
+br label %label2_statementsNext
+label2_statementsNext:
+%t6 = load i32, i32* %v3, align 4
+call void @printi(i32 %t6 )
+br label %label3_statementsNext
+label3_statementsNext:
+ret void
+}
+
