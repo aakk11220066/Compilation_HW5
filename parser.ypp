@@ -358,7 +358,7 @@ FuncDecl:		RetType
                     string params = "";
                     if (! $5.namesAndTypes.empty()){
                         for (const Variable& param : $5.namesAndTypes){
-                            params += string(", ") + retType;
+                            params += string(", ") + fancTypeToLlvmType(param.type);
                         }
                         params = params.substr(2);
                     }
@@ -370,11 +370,14 @@ FuncDecl:		RetType
                 }
                 Statements
                 RBRACE {
+                    string funcCloseLabel = Framework::getInstance().freshLabel("funcClose");
+                    codeManager.emitJmp(funcCloseLabel);
+                    codeManager.emitLabel(funcCloseLabel);
+                    codeManager.bpatch($10.nextList, funcCloseLabel);
+
                     string retType = fancTypeToLlvmType($1.type);
                     codeManager.emitFuncClose(retType);
                     Framework::getInstance().popScope();
-
-                    assert($10.nextList.empty());
                 };
 RetType:		Type {$$ = RetType($1.type);}
                     | VOID {$$ = RetType("VOID");};
@@ -410,7 +413,7 @@ Statements:		Statement {
                         $$.nextList = $3.nextList;
                         $$.falseList = codeManager.merge($3.falseList, $1.falseList);
                         $$.trueList = codeManager.merge($3.trueList, $1.trueList);
-                    } ; // DONE: backpatch
+                    } ;
 Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                 Statements {Framework::getInstance().popScope();}
                 RBRACE {
@@ -589,16 +592,16 @@ Call:			ID
                             $$ = Call ($1.name, type);
 
                             string argument_list = placesListToString($3.places_list, $3.arrguments_list);
-                            string operand = Framework::getInstance().freshTemp();
                             string return_type;
                             if (type == "VOID"){
                                 return_type = "void";
                                 codeManager.emit("call " + return_type + " @" + $1.name + "(" + argument_list + ")");
                             }
                             else{
-                                return_type = fancTypeToLlvmType($1.type);
-                                codeManager.emit(operand + " = call " + return_type + " @" + $1.name + "(" + argument_list + ")");
-                                $$.place = operand;
+                                string retVal = Framework::getInstance().freshTemp();
+                                return_type = fancTypeToLlvmType($$.type);
+                                codeManager.emit(retVal + " = call " + return_type + " @" + $1.name + "(" + argument_list + ")");
+                                $$.place = retVal;
                             }
 
                         }
@@ -610,12 +613,21 @@ Call:			ID
                     | ID LPAREN RPAREN {
 
                         try{
-                               string type = Framework::getInstance()[$1.name].type;
-                               if (!Framework::getInstance().isFunction($1.name)) throw Exceptions::IdentifierDoesNotExistException(yylineno, $1.name);
+                            string type = Framework::getInstance()[$1.name].type;
+                            if (!Framework::getInstance().isFunction($1.name)) throw Exceptions::IdentifierDoesNotExistException(yylineno, $1.name);
 
-                               $$ = Call ($1.name, type);
-                               string return_type = fancTypeToLlvmType($1.type);
-                               codeManager.emit("call " + return_type + " @" + $1.name + "()");
+                            $$ = Call ($1.name, type);
+                            string return_type = fancTypeToLlvmType($$.type);
+                            if (type == "VOID"){
+                                return_type = "void";
+                                codeManager.emit("call " + return_type + " @" + $1.name + "()");
+                            }
+                            else{
+                                string retVal = Framework::getInstance().freshTemp();
+                                return_type = fancTypeToLlvmType($$.type);
+                                codeManager.emit(retVal + " = call " + return_type + " @" + $1.name + "()");
+                                $$.place = retVal;
+                            }
                         }
                         catch(Exceptions::IdentifierDoesNotExistException &e){
                             output::errorUndefFunc(yylineno, $1.name);
@@ -624,13 +636,14 @@ Call:			ID
                     };
 ExpList:		Exp {   $$ = ExpList();
                         $$.arrguments_list.push_front($1.type);
+                        if ($1.type == "BOOL") insertBoolIntoRegister($1);
                         $$.places_list.push_front($1.place);
                      }
                     | Exp COMMA ExpList {
                         $$ = $3;
                         $$.arrguments_list.push_front($1.type);
+                        if ($1.type == "BOOL") insertBoolIntoRegister($1);
                         $$.places_list.push_front($1.place);
-
                     }
 Type:			INT {$$ = Type("INT");}
                     | BYTE{$$ =  Type("BYTE");}
@@ -647,6 +660,8 @@ Exp:			LPAREN Exp RPAREN {
                     $$ =  Exp($2.type);
 
                     $$.place = $2.place;
+                    $$.falseList = $2.falseList;
+                    $$.trueList = $2.trueList;
                 }
                     | Exp BINOP_ADDITIVE Exp {
                         string res_type = typeBinopAddChecking($1.type, $3.type);
@@ -832,7 +847,7 @@ Exp:			LPAREN Exp RPAREN {
                         $$.label = eval2ndExpLabel;
                     }
                     Exp {
-                        if($1.type != "BOOL" || $3.type != "BOOL"){
+                        if($1.type != "BOOL" || $4.type != "BOOL"){
                             output::errorMismatch(yylineno);
                             myExit();
                         }

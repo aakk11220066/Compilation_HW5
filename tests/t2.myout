@@ -8,7 +8,7 @@ define void @printi(i32) {call i32 (i8*, ...) @printf(i8* getelementptr ([4 x i8
 define void @print(i8*) {call i32 (i8*, ...) @printf(i8* getelementptr ([3 x i8], [3 x i8]* @.str_specifier, i32 0, i32 0), i8* %0) ret void}
 
 @.str32 = internal constant [3 x i8] c"*\0A\00"
-@.str39 = internal constant [3 x i8] c"*\0A\00"
+@.str38 = internal constant [3 x i8] c"*\0A\00"
 
 define i32  @fib(i32 ){
 entry:
@@ -40,6 +40,8 @@ label2_statementsNext:
 %t17 = call i32  @fib(i32 %t16 )
 %t18 = add i32 %t12, %t17
 ret i32  %t18
+br label %label3_funcClose
+label3_funcClose:
 }
 
 define void  @main(){
@@ -47,42 +49,44 @@ entry:
 %t19 = add i32 0, 0
 %v20 = alloca i32, align 4
 store i32 %t19, i32* %v20, align 4
-br label %label3_statementsNext
-label3_statementsNext:
-br label %label4_loop
-label4_loop:
+br label %label4_statementsNext
+label4_statementsNext:
+br label %label5_loop
+label5_loop:
 %t21 = load i32, i32* %v20, align 4
 %t22 = add i32 10, 0
 %t23 = icmp slt i32 %t21, %t22
-br i1 %t23, label %label5_enterLoopCode, label %label9_statementsNext
-br label %label5_enterLoopCode
-label5_enterLoopCode:
+br i1 %t23, label %label6_enterLoopCode, label %label10_statementsNext
+br label %label6_enterLoopCode
+label6_enterLoopCode:
 %t24 = load i32, i32* %v20, align 4
 %t25 = call i32  @fib(i32 %t24 )
 call void @printi(i32 %t25 )
-br label %label6_statementsNext
-label6_statementsNext:
+br label %label7_statementsNext
+label7_statementsNext:
 %t27 = load i32, i32* %v20, align 4
 %t28 = add i32 1, 0
 %t29 = add i32 %t27, %t28
 %t30 = add i32 10, 0
 %t31 = icmp slt i32 %t29, %t30
-br i1 %t31, label %label7_enterIfCode, label %label8_statementsNext
-label7_enterIfCode:
+br i1 %t31, label %label8_enterIfCode, label %label9_statementsNext
+label8_enterIfCode:
 %str_ptr32 = getelementptr [3 x i8], [3 x i8]* @.str32, i32 0, i32 0
 call void @print(i8* %str_ptr32 )
-br label %label8_statementsNext
-label8_statementsNext:
+br label %label9_statementsNext
+label9_statementsNext:
 %t34 = load i32, i32* %v20, align 4
 %t35 = add i32 1, 0
 %t36 = add i32 %t34, %t35
 %t37 = urem i32 %t36, 256
-%v38 = alloca i32, align 4
-store i32 %t37, i32* %v38, align 4
-br label %label4_loop
-br label %label9_statementsNext
-label9_statementsNext:
-%str_ptr39 = getelementptr [3 x i8], [3 x i8]* @.str39, i32 0, i32 0
-call void @print(i8* %str_ptr39 )
+store i32 %t37, i32* %v20, align 4
+br label %label5_loop
+br label %label10_statementsNext
+label10_statementsNext:
+%str_ptr38 = getelementptr [3 x i8], [3 x i8]* @.str38, i32 0, i32 0
+call void @print(i8* %str_ptr38 )
+br label %label11_funcClose
+label11_funcClose:
+ret void
 }
 

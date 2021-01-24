@@ -1,0 +1,62 @@
+declare void @exit(i32)
+declare i32 @printf(i8*, ...)
+
+@.int_specifier = internal constant [4 x i8] c"%d\0A\00"
+define void @printi(i32) {call i32 (i8*, ...) @printf(i8* getelementptr ([4 x i8], [4 x i8]* @.int_specifier, i32 0, i32 0), i32 %0) ret void}
+
+@.str_specifier = internal constant [3 x i8] c"%s\00"
+define void @print(i8*) {call i32 (i8*, ...) @printf(i8* getelementptr ([3 x i8], [3 x i8]* @.str_specifier, i32 0, i32 0), i8* %0) ret void}
+
+@.str3 = internal constant [13 x i8] c"val is true\0A\00"
+@.str5 = internal constant [14 x i8] c"val is false\0A\00"
+@.str9 = internal constant [6 x i8] c"true\0A\00"
+@.str11 = internal constant [6 x i8] c"true\0A\00"
+
+define void  @printByValue(void ){
+entry:
+%v0 = alloca i32, align 4
+store i32 %0, i32* %v0, align 4
+%t1 = load i32, i32* %v0, align 4
+%t2 = icmp eq i32 %t1, 1
+br i1 %t2, label %label0_enterIfCode, label %label1_enterElseCode
+label0_enterIfCode:
+%str_ptr3 = getelementptr [13 x i8], [13 x i8]* @.str3, i32 0, i32 0
+call void @print(i8* %str_ptr3 )
+br label %label2_funcClose
+label1_enterElseCode:
+%str_ptr5 = getelementptr [14 x i8], [14 x i8]* @.str5, i32 0, i32 0
+call void @print(i8* %str_ptr5 )
+br label %label2_funcClose
+label2_funcClose:
+ret void
+}
+
+define void  @main(){
+entry:
+br label @
+call void @printByValue(i32  )
+br label %label3_statementsNext
+label3_statementsNext:
+br label @
+call void @printByValue(i32  )
+br label %label4_statementsNext
+label4_statementsNext:
+br label %label5_enterIfCode
+label5_enterIfCode:
+%str_ptr9 = getelementptr [6 x i8], [6 x i8]* @.str9, i32 0, i32 0
+call void @print(i8* %str_ptr9 )
+br label %label6_statementsNext
+label6_statementsNext:
+br label %label7_eval2ndExp
+label7_eval2ndExp:
+br label %label10_funcClose
+label8_eval2ndExp:
+br label %label9_enterIfCode
+label9_enterIfCode:
+%str_ptr11 = getelementptr [6 x i8], [6 x i8]* @.str11, i32 0, i32 0
+call void @print(i8* %str_ptr11 )
+br label %label10_funcClose
+label10_funcClose:
+ret void
+}
+

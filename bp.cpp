@@ -131,6 +131,12 @@ void CodeBuffer::emitFuncOpen(const string &name, const string& retType, const s
 
 void CodeBuffer::emitFuncClose(const string& retType) {
 	if (retType == "void ") emit("ret void");
+    else if (retType == SET_def + " ") {
+        string emptySet = Framework::getInstance().freshTemp();
+        emitNewSet("0", "5", emptySet);
+        emit("ret " + retType + " " + emptySet);
+    }
+    else emit("ret i32 0");
 	emit("}");
 	emitEndLine();
 }
