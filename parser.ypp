@@ -16,7 +16,7 @@
     extern int yylineno;
     int yylex();
     void yyerror(const char*);
-    bool isInWhile = false;
+    int isInWhile = 0;
 
     CodeBuffer& codeManager = CodeBuffer::instance();
 
@@ -323,6 +323,7 @@
 
 %%
 // TODO: add ret even if return not given
+// TODO: test returning a set
 
 Program:		Funcs {
                     assert($1.nextList.empty());
@@ -472,8 +473,9 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                         const string& last_function_type = Framework::getInstance().getLastAddedFunction().type;
                         assignTypeCheck(last_function_type, $2.type);
                         $$ = Statement($2.type);
-                        codeManager.emit("ret " + fancTypeToLlvmType($2.type) + " " + $2.place);
 
+                        if ($2.type == "BOOL") insertBoolIntoRegister($2);
+                        codeManager.emit("ret " + fancTypeToLlvmType($2.type) + " " + $2.place);
                     }
 
                     | IF
@@ -531,7 +533,7 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                     }
                     Exp
                     RPAREN {
-                        Framework::getInstance().addScope(Scope::LOOP); isInWhile = true;
+                        Framework::getInstance().addScope(Scope::LOOP); ++isInWhile;
 
                         string enterLoopCodeLabel = Framework::getInstance().freshLabel("enterLoopCode");
                         codeManager.emitJmp(enterLoopCodeLabel);
@@ -540,7 +542,7 @@ Statement:		LBRACE {Framework::getInstance().addScope(Scope::BLOCK);}
                     }
                     Statement {
                         Framework::getInstance().popScope();
-                        isInWhile = false;
+                        --isInWhile;
                     } {
                         if ($4.type != "BOOL"){
                              output::errorMismatch(yylineno);
@@ -639,10 +641,9 @@ ExpList:		Exp {   $$ = ExpList();
                         if ($1.type == "BOOL") insertBoolIntoRegister($1);
                         $$.places_list.push_front($1.place);
                      }
-                    | Exp COMMA ExpList {
-                        $$ = $3;
+                    | Exp {if ($1.type == "BOOL") insertBoolIntoRegister($1);} COMMA ExpList {
+                        $$ = $4;
                         $$.arrguments_list.push_front($1.type);
-                        if ($1.type == "BOOL") insertBoolIntoRegister($1);
                         $$.places_list.push_front($1.place);
                     }
 Type:			INT {$$ = Type("INT");}
@@ -791,7 +792,15 @@ Exp:			LPAREN Exp RPAREN {
                     | Call {
                         $$ =  Exp($1.type);
 
-                        $$.place = $1.place;
+                        string& val = $1.place;
+                        if ($$.type != "BOOL"){
+                            $$.place = val;
+                        }
+                        else{
+                            pair<bpatch_address, bpatch_address> bpatchRequests = compare(val, "1", "eq");
+                            $$.trueList = codeManager.makelist(bpatchRequests.first);
+                            $$.falseList = codeManager.makelist(bpatchRequests.second);
+                        }
                     }
                     | NUM {
                         $$ = Exp("INT");
